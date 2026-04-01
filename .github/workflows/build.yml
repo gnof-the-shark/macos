@@ -1,0 +1,59 @@
+name: Build iOS IPA (AltStore Ready)
+on: [push]
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Dependencies
+        run: |
+          npm install
+          npx cap add ios
+
+      - name: Copy Web Assets
+        run: |
+          mkdir -p www
+          # On copie ton fichier HTML unique dans le dossier de build
+          cp index.html www/
+          # Si tu as un manifest.json pour les icônes, décommente la ligne suivante :
+          # cp manifest.json www/ 
+
+      - name: Sync Capacitor
+        run: npx cap sync ios
+
+      - name: Add Camera Permission (Info.plist)
+        run: |
+          # Cette ligne ajoute l'explication que l'utilisateur verra pour la caméra
+          plutil -insert NSCameraUsageDescription -string "Cette application a besoin de la caméra pour scanner les codes-barres des produits." ios/App/App/Info.plist
+
+      - name: Build Xcode Archive
+        run: |
+          xcodebuild archive \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Debug \
+            -archivePath MyApp.xcarchive \
+            -sdk iphoneos \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            ENTITLEMENTS_REQUIRED=NO
+
+      - name: Create IPA Package
+        run: |
+          mkdir -p Payload
+          cp -r MyApp.xcarchive/Products/Applications/App.app Payload/
+          zip -r Congelo.ipa Payload/
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Inventory-IPA
+          path: Congelo.ipa
