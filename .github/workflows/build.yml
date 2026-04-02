@@ -44,6 +44,14 @@ jobs:
             find . -name "firebase-config.js" -exec cp {} www/ \;
           fi
 
+      - name: Create Capacitor Config
+        run: |
+          echo '{
+            "appId": "com.gnoftheshark.sporttracker",
+            "appName": "Sport Tracker",
+            "webDir": "www"
+          }' > capacitor.config.json
+
       - name: Capacitor Setup
         run: |
           # On supprime tout ancien dossier ios pour éviter les erreurs de liens Windows/Mac
@@ -91,6 +99,7 @@ jobs:
         run: |
           cat > ios/App/App/AppDelegate.swift << 'SWIFT'
           import UIKit
+          import Capacitor
           import FirebaseCore
 
           @UIApplicationMain
@@ -103,6 +112,17 @@ jobs:
                 [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
               FirebaseApp.configure()
               return true
+            }
+
+            func application(_ app: UIApplication, open url: URL,
+              options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+              return ApplicationDelegateProxy.shared.application(app, open: url, options: options)
+            }
+
+            func application(_ application: UIApplication, continue userActivity: NSUserActivity,
+              restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
+              return ApplicationDelegateProxy.shared.application(
+                application, continue: userActivity, restorationHandler: restorationHandler)
             }
           }
           SWIFT
