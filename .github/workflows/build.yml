@@ -22,23 +22,24 @@ jobs:
 
       - name: Prepare Web Assets
         run: |
+          # On crée le dossier de build
           mkdir -p www
-          # On cherche les fichiers dans tout le dépôt et on les ramène dans www
-          find . -name "index.html" -exec cp {} www/ \;
-          find . -name "styles.css" -exec cp {} www/ \;
-          find . -name "app.js" -exec cp {} www/ \;
-          find . -name "admin.js" -exec cp {} www/ \;
-          find . -name "firebase-config.js" -exec cp {} www/ \;
+          # On copie tes fichiers de la racine vers www
+          cp index.html www/
+          cp styles.css www/
+          cp app.js www/
+          cp admin.js www/
+          cp firebase-config.js www/
           
-          # Vérification : si index.html n'est pas dans www, on force l'échec ici avec un message
+          # Vérification de sécurité
           if [ ! -f "www/index.html" ]; then
-            echo "ERREUR : Fichiers sources introuvables dans le dépôt !"
+            echo "ERREUR : index.html introuvable à la racine !"
             exit 1
           fi
 
       - name: Setup iOS Project
         run: |
-          # Supprime le dossier ios s'il existe pour éviter les conflits de liens corrompus
+          # On s'assure de partir sur un dossier iOS tout neuf
           rm -rf ios
           npx cap add ios
           npx cap sync ios
