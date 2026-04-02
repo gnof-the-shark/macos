@@ -22,14 +22,16 @@ jobs:
 
       - name: Prepare Files
         run: |
-          # Création du dossier www s'il n'existe pas
           mkdir -p www
-          # Copie de tes fichiers Sport-main (le point . signifie dossier courant)
-          cp index.html styles.css app.js admin.js firebase-config.js www/ || true
+          # On cherche les fichiers dans le sous-dossier Sport-main et on les copie dans www
+          cp Sport-main/index.html www/ || cp index.html www/
+          cp Sport-main/styles.css www/ || cp styles.css www/
+          cp Sport-main/app.js www/ || cp app.js www/
+          cp Sport-main/admin.js www/ || cp admin.js www/
+          cp Sport-main/firebase-config.js www/ || cp firebase-config.js www/
 
       - name: Initialize iOS Project
         run: |
-          # Si le dossier ios n'existe pas, on le crée proprement
           if [ ! -d "ios" ]; then
             npx cap add ios
           fi
@@ -37,8 +39,7 @@ jobs:
       - name: Sync & Patch Permissions
         run: |
           npx cap sync ios
-          # Ajout de la permission Caméra dans le fichier Info.plist
-          plutil -insert NSCameraUsageDescription -string "Accès nécessaire pour scanner les codes ou le profil." ios/App/App/Info.plist || true
+          plutil -insert NSCameraUsageDescription -string "Accès nécessaire pour le défi sport." ios/App/App/Info.plist || true
           
       - name: Build Xcode Archive
         run: |
