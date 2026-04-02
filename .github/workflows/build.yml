@@ -44,6 +44,10 @@ jobs:
             find . -name "firebase-config.js" -exec cp {} www/ \;
           fi
 
+      - name: Create Capacitor Config
+        run: |
+          echo '{"appId": "com.sporttracker.app", "appName": "SportTracker", "webDir": "www"}' > capacitor.config.json
+
       - name: Capacitor Setup
         run: |
           # On supprime tout ancien dossier ios pour éviter les erreurs de liens Windows/Mac
