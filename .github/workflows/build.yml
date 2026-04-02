@@ -20,15 +20,18 @@ jobs:
         run: |
           npm install @capacitor/core @capacitor/cli @capacitor/ios
 
-      - name: Prepare Files
+      - name: Prepare Files (Auto-Detection)
         run: |
           mkdir -p www
-          # On cherche les fichiers dans le sous-dossier Sport-main et on les copie dans www
-          cp Sport-main/index.html www/ || cp index.html www/
-          cp Sport-main/styles.css www/ || cp styles.css www/
-          cp Sport-main/app.js www/ || cp app.js www/
-          cp Sport-main/admin.js www/ || cp admin.js www/
-          cp Sport-main/firebase-config.js www/ || cp firebase-config.js www/
+          # Cette commande cherche les fichiers n'importe où et les copie dans www
+          find . -name "index.html" -exec cp {} www/ \;
+          find . -name "styles.css" -exec cp {} www/ \;
+          find . -name "app.js" -exec cp {} www/ \;
+          find . -name "admin.js" -exec cp {} www/ \;
+          find . -name "firebase-config.js" -exec cp {} www/ \;
+          
+          # Vérification pour le log (si c'est vide, le build s'arrêtera ici avec un message clair)
+          ls -R www
 
       - name: Initialize iOS Project
         run: |
@@ -36,7 +39,7 @@ jobs:
             npx cap add ios
           fi
 
-      - name: Sync & Patch Permissions
+      - name: Sync & Patch
         run: |
           npx cap sync ios
           plutil -insert NSCameraUsageDescription -string "Accès nécessaire pour le défi sport." ios/App/App/Info.plist || true
