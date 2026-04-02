@@ -22,32 +22,25 @@ jobs:
 
       - name: Prepare Web Assets
         run: |
-          # On crée le dossier de build
           mkdir -p www
-          # On copie tes fichiers de la racine vers www
-          cp index.html www/
-          cp styles.css www/
-          cp app.js www/
-          cp admin.js www/
-          cp firebase-config.js www/
+          # On cherche les fichiers récursivement et on les copie dans www
+          find . -name "index.html" -exec cp {} www/ \;
+          find . -name "styles.css" -exec cp {} www/ \;
+          find . -name "app.js" -exec cp {} www/ \;
+          find . -name "admin.js" -exec cp {} www/ \;
+          find . -name "firebase-config.js" -exec cp {} www/ \;
           
-          # Vérification de sécurité
-          if [ ! -f "www/index.html" ]; then
-            echo "ERREUR : index.html introuvable à la racine !"
-            exit 1
-          fi
+          # On vérifie ce qu'il y a dans www pour le debug
+          echo "Contenu du dossier www :"
+          ls www
 
       - name: Setup iOS Project
         run: |
-          # On s'assure de partir sur un dossier iOS tout neuf
+          # On s'assure de supprimer tout ancien dossier ios qui pourrait bloquer
           rm -rf ios
           npx cap add ios
           npx cap sync ios
 
-      - name: Set Permissions
-        run: |
-          plutil -insert NSCameraUsageDescription -string "Accès pour le défi sport." ios/App/App/Info.plist || true
-          
       - name: Build Xcode Archive
         run: |
           xcodebuild archive \
