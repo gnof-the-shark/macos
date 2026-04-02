@@ -51,6 +51,69 @@ jobs:
           npx cap add ios
           npx cap sync ios
 
+      - name: Copy GoogleService-Info.plist
+        run: |
+          cp GoogleService-Info.plist ios/App/App/
+
+      - name: Add Firebase via Swift Package Manager
+        run: |
+          gem install xcodeproj --no-document 2>/dev/null || true
+          ruby << 'RUBYEOF'
+          require 'xcodeproj'
+
+          project_path = 'ios/App/App.xcodeproj'
+          project = Xcodeproj::Project.open(project_path)
+
+          # Add Firebase remote package reference
+          package = project.new(Xcodeproj::Project::Object::XCRemoteSwiftPackageReference)
+          package.repositoryURL = 'https://github.com/firebase/firebase-ios-sdk'
+          package.requirement = { 'kind' => 'upToNextMajorVersion', 'minimumVersion' => '11.0.0' }
+          project.root_object.package_references << package
+
+          # Add FirebaseAnalytics to App target
+          target = project.targets.find { |t| t.name == 'App' }
+          if target
+            product = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
+            product.package = package
+            product.product_name = 'FirebaseAnalytics'
+            target.package_product_dependencies << product
+
+            build_file = project.new(Xcodeproj::Project::Object::PBXBuildFile)
+            build_file.product_ref = product
+            target.frameworks_build_phase.files << build_file
+          end
+
+          project.save
+          puts "Firebase SPM dependency added successfully"
+          RUBYEOF
+
+      - name: Setup AppDelegate with Firebase
+        run: |
+          cat > ios/App/App/AppDelegate.swift << 'SWIFT'
+          import UIKit
+          import FirebaseCore
+
+          @UIApplicationMain
+          class AppDelegate: UIResponder, UIApplicationDelegate {
+
+            var window: UIWindow?
+
+            func application(_ application: UIApplication,
+              didFinishLaunchingWithOptions launchOptions:
+                [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+              FirebaseApp.configure()
+              return true
+            }
+          }
+          SWIFT
+
+      - name: Resolve Firebase Package Dependencies
+        run: |
+          cd ios/App
+          xcodebuild -resolvePackageDependencies \
+            -workspace App.xcworkspace \
+            -scheme App
+
       - name: Build IPA
         run: |
           xcodebuild archive \
