@@ -1,9 +1,12 @@
-name: Build iOS IPA (AltStore Ready)
+name: Build Sport App IPA
 on: [push]
 
 jobs:
   build:
     runs-on: macos-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true # Force l'utilisation de Node 24 pour éviter l'erreur de dépréciation
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -11,49 +14,50 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24 # Passage à la version 24
 
       - name: Install Dependencies
         run: |
-          npm install
-          npx cap add ios
+          npm install @capacitor/core @capacitor/cli @capacitor/ios
 
-      - name: Copy Web Assets
+      - name: Prepare Files
         run: |
           mkdir -p www
-          # On copie ton fichier HTML unique dans le dossier de build
+          # On copie tous les fichiers nécessaires de ton projet Sport-main
           cp index.html www/
-          # Si tu as un manifest.json pour les icônes, décommente la ligne suivante :
-          # cp manifest.json www/ 
+          cp styles.css www/
+          cp app.js www/
+          cp admin.js www/
+          cp firebase-config.js www/
 
-      - name: Sync Capacitor
-        run: npx cap sync ios
-
-      - name: Add Camera Permission (Info.plist)
+      - name: Initialize Capacitor
         run: |
-          # Cette ligne ajoute l'explication que l'utilisateur verra pour la caméra
-          plutil -insert NSCameraUsageDescription -string "Cette application a besoin de la caméra pour scanner les codes-barres des produits." ios/App/App/Info.plist
+          npx cap add ios
 
-      - name: Build Xcode Archive
+      - name: Sync & Build
         run: |
+          npx cap sync ios
+          # Injection de la permission caméra pour iOS
+          plutil -insert NSCameraUsageDescription -string "Accès nécessaire pour scanner ou pour le profil." ios/App/App/Info.plist
+          
           xcodebuild archive \
             -workspace ios/App/App.xcworkspace \
             -scheme App \
             -configuration Debug \
-            -archivePath MyApp.xcarchive \
+            -archivePath SportApp.xcarchive \
             -sdk iphoneos \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             ENTITLEMENTS_REQUIRED=NO
 
-      - name: Create IPA Package
+      - name: Package IPA
         run: |
           mkdir -p Payload
-          cp -r MyApp.xcarchive/Products/Applications/App.app Payload/
-          zip -r Congelo.ipa Payload/
+          cp -r SportApp.xcarchive/Products/Applications/App.app Payload/
+          zip -r SportTracker.ipa Payload/
 
-      - name: Upload IPA
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Inventory-IPA
-          path: Congelo.ipa
+          name: Sport-App-IPA
+          path: SportTracker.ipa
