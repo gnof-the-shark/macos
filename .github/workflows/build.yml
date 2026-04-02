@@ -16,33 +16,36 @@ jobs:
         with:
           node-version: 24
 
-      - name: Install Dependencies
+      - name: Install Capacitor
         run: |
           npm install @capacitor/core @capacitor/cli @capacitor/ios
 
-      - name: Prepare Files (Auto-Detection)
+      - name: Prepare Web Assets
         run: |
           mkdir -p www
-          # Cette commande cherche les fichiers n'importe où et les copie dans www
+          # On cherche les fichiers dans tout le dépôt et on les ramène dans www
           find . -name "index.html" -exec cp {} www/ \;
           find . -name "styles.css" -exec cp {} www/ \;
           find . -name "app.js" -exec cp {} www/ \;
           find . -name "admin.js" -exec cp {} www/ \;
           find . -name "firebase-config.js" -exec cp {} www/ \;
           
-          # Vérification pour le log (si c'est vide, le build s'arrêtera ici avec un message clair)
-          ls -R www
-
-      - name: Initialize iOS Project
-        run: |
-          if [ ! -d "ios" ]; then
-            npx cap add ios
+          # Vérification : si index.html n'est pas dans www, on force l'échec ici avec un message
+          if [ ! -f "www/index.html" ]; then
+            echo "ERREUR : Fichiers sources introuvables dans le dépôt !"
+            exit 1
           fi
 
-      - name: Sync & Patch
+      - name: Setup iOS Project
         run: |
+          # Supprime le dossier ios s'il existe pour éviter les conflits de liens corrompus
+          rm -rf ios
+          npx cap add ios
           npx cap sync ios
-          plutil -insert NSCameraUsageDescription -string "Accès nécessaire pour le défi sport." ios/App/App/Info.plist || true
+
+      - name: Set Permissions
+        run: |
+          plutil -insert NSCameraUsageDescription -string "Accès pour le défi sport." ios/App/App/Info.plist || true
           
       - name: Build Xcode Archive
         run: |
