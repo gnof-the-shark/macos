@@ -17,20 +17,12 @@ jobs:
           node-version: 24
 
       - name: Install Capacitor
-        run: |
-          npm install @capacitor/core @capacitor/cli @capacitor/ios
+        run: npm install
 
       - name: Prepare Web Assets
         run: |
           mkdir -p www
-          # On cherche les fichiers récursivement et on les copie dans www
-          find . -name "index.html" -exec cp {} www/ \;
-          find . -name "styles.css" -exec cp {} www/ \;
-          find . -name "app.js" -exec cp {} www/ \;
-          find . -name "admin.js" -exec cp {} www/ \;
-          find . -name "firebase-config.js" -exec cp {} www/ \;
-          
-          # On vérifie ce qu'il y a dans www pour le debug
+          cp index.html styles.css app.js admin.js firebase-config.js www/
           echo "Contenu du dossier www :"
           ls www
 
