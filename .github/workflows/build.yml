@@ -1,4 +1,4 @@
-name: "Build RemoteCam Sideloadly"
+name: "Build RemoteCam Final"
 
 on:
   push:
@@ -26,8 +26,8 @@ jobs:
       - name: Preparation des Ressources
         run: |
           mkdir -p resources www
-          cp icon.png resources/icon.png 2>/dev/null || echo "icon.png manquant"
-          cp index.html www/index.html
+          if [ -f icon.png ]; then cp icon.png resources/icon.png; fi
+          cp index.html www/index.html 2>/dev/null || echo "<html><body style='background:transparent;'></body></html>" > www/index.html
           npx @capacitor/assets generate --ios
 
       - name: Sync Capacitor
@@ -35,13 +35,12 @@ jobs:
           npx cap copy ios
           npx cap sync ios
 
-      - name: Injection du Code Swift
+      - name: Injection du Code et Correction Xcode
         run: |
-          # On déplace tes fichiers vers le projet iOS généré par GitHub
+          # 1. On copie tes fichiers
           cp CameraManager.swift ios/App/App/
-          cp ContentView.swift ios/App/App/
           
-          # On crée le fichier de démarrage pour forcer la caméra sous le texte
+          # 2. Création du AppDelegate corrigé (avec import AVFoundation explicite)
           cat <<EOF > ios/App/App/AppDelegate.swift
           import UIKit
           import Capacitor
@@ -50,19 +49,25 @@ jobs:
           @UIApplicationMain
           class AppDelegate: UIResponder, UIApplicationDelegate {
               var window: UIWindow?
-              var cameraManager = CameraManager()
+              lazy var cameraManager = CameraManager()
+              
               func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
                   cameraManager.setup()
                   let previewLayer = AVCaptureVideoPreviewLayer(session: cameraManager.session)
-                  previewLayer.videoGravity = .resizeAspectFill
+                  previewLayer.videoGravity = AVLayerVideoGravity.resizeAspectFill
+                  
                   DispatchQueue.main.async {
                       if let rootVC = self.window?.rootViewController {
                           previewLayer.frame = rootVC.view.bounds
                           rootVC.view.layer.insertSublayer(previewLayer, at: 0)
                           rootVC.view.backgroundColor = .clear
+                          
                           for subview in rootVC.view.subviews {
                               subview.backgroundColor = .clear
-                              if let webView = subview as? UIView { webView.isOpaque = false; webView.backgroundColor = .clear }
+                              if let webView = subview as? UIView {
+                                  webView.isOpaque = false
+                                  webView.backgroundColor = .clear
+                              }
                           }
                       }
                   }
@@ -79,23 +84,25 @@ jobs:
       - name: Compilation (IPA non signé)
         run: |
           cd ios/App
+          # On force Xcode à compiler TOUS les fichiers Swift du dossier
           xcodebuild build \
             -workspace App.xcworkspace \
             -scheme App \
             -sdk iphoneos \
             -configuration Release \
             CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO
+            CODE_SIGNING_REQUIRED=NO \
+            OTHER_SWIFT_FLAGS="\$(inherited) -DCOCOAPODS"
 
       - name: Preparation du fichier IPA
         run: |
           mkdir -p Payload
           APP_PATH=\$(find ~/Library/Developer/Xcode/DerivedData -name "App.app" -type d | head -n 1)
           cp -r "\$APP_PATH" Payload/
-          zip -r RemoteCam_Ready.ipa Payload
+          zip -r RemoteCam_Final.ipa Payload
 
       - name: Envoi du fichier
         uses: actions/upload-artifact@v4
         with:
           name: RemoteCam-Final-IPA
-          path: RemoteCam_Ready.ipa
+          path: RemoteCam_Final.ipa
