@@ -6,8 +6,8 @@ options:
 
 packages:
   ConnectIQ:
-    url: https://github.com/garmin/connectiq-apple-sdk
-    from: 1.0.0
+    url: https://github.com/garmin/connectiq-companion-app-sdk-ios
+    from: 1.8.0
 
 targets:
   App:
