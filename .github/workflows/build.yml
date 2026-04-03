@@ -25,16 +25,24 @@ jobs:
 
       - name: Build Web & Sync Capacitor
         run: |
-          # Simule un build web (ou utilise ton propre script build)
           mkdir -p www
-          echo "<html><body>Camera Bridge Ready</body></html>" > www/index.html
+          # On crée un index.html minimal si vide
+          if [ ! -f www/index.html ]; then echo "<html><body>Camera Bridge Ready</body></html>" > www/index.html; fi
           npx cap copy ios
           npx cap sync ios
+
+      - name: Install Pods
+        run: |
+          cd ios/App
+          # Installation des dépendances natives Capacitor via CocoaPods
+          pod install
 
       - name: Compile iOS App (Unsigned)
         run: |
           cd ios/App
+          # IMPORTANT : On utilise .xcworkspace maintenant, pas .xcodeproj
           xcodebuild build \
+            -workspace App.xcworkspace \
             -scheme App \
             -sdk iphoneos \
             -configuration Release \
@@ -45,7 +53,7 @@ jobs:
       - name: Create IPA for Sideloadly
         run: |
           mkdir -p Payload
-          # Localiser le .app généré par Capacitor
+          # Localiser le .app généré
           APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "App.app" -type d | head -n 1)
           cp -r "$APP_PATH" Payload/
           zip -r RemoteCam_Capacitor.ipa Payload
