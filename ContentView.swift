@@ -13,11 +13,26 @@ struct ContentView: View {
             
             VStack {
                 Spacer()
-                Text("En attente de la montre...")
-                    .foregroundColor(.white)
-                    .padding()
-                    .background(Color.black.opacity(0.5))
-                    .cornerRadius(10)
+                // Bouton déclencheur manuel (sans montre)
+                Button(action: {
+                    cameraManager.takePhoto()
+                }) {
+                    Circle()
+                        .strokeBorder(Color.white, lineWidth: 4)
+                        .background(Circle().fill(Color.white.opacity(0.3)))
+                        .frame(width: 70, height: 70)
+                }
+                .padding(.bottom, 20)
+                // Bouton connexion montre Garmin
+                Button("Connecter la montre") {
+                    cameraManager.selectGarminDevice()
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(Color.blue.opacity(0.8))
+                .foregroundColor(.white)
+                .cornerRadius(10)
+                .padding(.bottom, 30)
             }
         }
         .onAppear {
@@ -49,10 +64,19 @@ class CameraManager: NSObject, ObservableObject, IQDeviceEventDelegate {
         session.startRunning()
     }
     
+    func takePhoto() {
+        let settings = AVCapturePhotoSettings()
+        photoOutput.capturePhoto(with: settings, delegate: self)
+    }
+    
     func setupGarmin() {
-        // Initialisation du SDK ConnectIQ pour écouter "TAKE_PHOTO"
-        guard let ciq = ConnectIQ.sharedInstance() else { return }
-        ciq.showDeviceSelection()
+        // Enregistrement du délégué pour recevoir les messages de la montre
+        ConnectIQ.sharedInstance().register(forDeviceEvents: self, deviceEventDelegate: self)
+    }
+    
+    func selectGarminDevice() {
+        // Ouvre le sélecteur de montre Garmin à la demande de l'utilisateur
+        ConnectIQ.sharedInstance().showDeviceSelection()
     }
     
     // Déclenché par la montre
