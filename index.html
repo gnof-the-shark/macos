@@ -5,26 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RemoteCam</title>
     <style>
-        /* On rend le fond transparent pour voir la caméra derrière */
-        body { background-color: transparent !important; color: white; text-align: center; font-family: sans-serif; }
-        .ui-layer { background: rgba(0,0,0,0.4); padding: 20px; border-radius: 15px; margin: 20px; }
-        .status { color: #00ff00; font-weight: bold; }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: transparent !important; /* Crucial pour voir le Swift derrière */
+            overflow: hidden;
+        }
     </style>
 </head>
 <body>
-    <div class="ui-layer">
-        <h1>RemoteCam</h1>
-        <div id="status" class="status">Caméra Active</div>
-        <p>Flux en cours vers Garmin...</p>
-    </div>
-
-    <script>
-        // Ce code dit à Capacitor de rendre le WebView transparent
-        // pour que la couche native (la caméra) apparaisse
-        window.addEventListener('DOMContentLoaded', () => {
-            console.log("App prête");
-            // Ici, on pourrait ajouter un appel vers un plugin
-        });
-    </script>
-</body>
+    </body>
 </html>
