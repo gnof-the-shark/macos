@@ -28,7 +28,7 @@ struct ContentView: View {
 }
 
 // Logique de la caméra et de la connexion Garmin
-class CameraManager: NSObject, ObservableObject, IQDeviceEventDelegate {
+class CameraManager: NSObject, ObservableObject, IQAppMessageDelegate {
     let session = AVCaptureSession()
     private let photoOutput = AVCapturePhotoOutput()
     
