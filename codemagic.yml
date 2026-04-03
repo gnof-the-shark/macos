@@ -1,0 +1,98 @@
+workflows:
+  ios-build:
+    name: RemoteCam iOS Build
+    max_build_duration: 30
+    instance_type: mac_mini_m1
+    environment:
+      node: latest
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Install Dependencies
+        script: | 
+          npm install
+          npx cap add ios
+      
+      - name: Download Garmin SDK
+        script: |
+          git clone https://github.com/garmin/connectiq-companion-app-sdk-ios.git garmin-sdk
+          mkdir -p ios/App/Frameworks
+          cp -r garmin-sdk/ConnectIQ.xcframework ios/App/Frameworks/
+
+      - name: Inject Native Swift Code
+        script: |
+          # Création du AppDelegate complet
+          cat <<'EOF' > ios/App/App/AppDelegate.swift
+          import UIKit
+          import Capacitor
+          import AVFoundation
+          import ConnectIQ
+
+          @UIApplicationMain
+          class AppDelegate: UIResponder, UIApplicationDelegate {
+              var window: UIWindow?
+              lazy var cameraManager = CameraManager()
+              func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+                  cameraManager.setup()
+                  let previewLayer = AVCaptureVideoPreviewLayer(session: cameraManager.session)
+                  previewLayer.videoGravity = .resizeAspectFill
+                  DispatchQueue.main.async {
+                      if let rootVC = self.window?.rootViewController {
+                          previewLayer.frame = rootVC.view.bounds
+                          rootVC.view.layer.insertSublayer(previewLayer, at: 0)
+                          rootVC.view.backgroundColor = .clear
+                          for subview in rootVC.view.subviews {
+                              subview.backgroundColor = .clear
+                          }
+                      }
+                  }
+                  return true
+              }
+          }
+          extension UIImage {
+              func resized(to size: CGSize) -> UIImage? {
+                  UIGraphicsBeginImageContextWithOptions(size, false, 0.0)
+                  draw(in: CGRect(origin: .zero, size: size))
+                  let newImage = UIGraphicsGetImageFromCurrentImageContext()
+                  UIGraphicsEndImageContext()
+                  return newImage
+              }
+          }
+          EOF
+          # Ajout de ton CameraManager (assure-toi que le fichier existe à la racine)
+          echo "\n" >> ios/App/App/AppDelegate.swift
+          grep -v "import " CameraManager.swift >> ios/App/App/AppDelegate.swift
+
+      - name: Configure Pods
+        script: |
+          cat <<'EOF' > ios/App/Podfile
+          platform :ios, '13.0'
+          target 'App' do
+            use_frameworks!
+            pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
+            pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
+          end
+          EOF
+          cd ios/App && pod install --repo-update
+
+      - name: Build iOS App (Unsigned)
+        script: |
+          cd ios/App
+          xcodebuild build \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -sdk iphoneos \
+            -configuration Release \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            FRAMEWORK_SEARCH_PATHS="$(inherited) $(PROJECT_DIR)/Frameworks" \
+            OTHER_LDFLAGS="$(inherited) -framework ConnectIQ"
+
+      - name: Package IPA
+        script: |
+          mkdir -p Payload
+          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "App.app" -type d | head -n 1)
+          cp -r "$APP_PATH" Payload/
+          zip -r RemoteCam.ipa Payload
+    artifacts:
+      - "*.ipa"
