@@ -18,15 +18,19 @@ jobs:
           npm install
           npx cap add ios
 
-      - name: Téléchargement Manuel du SDK Garmin
+- name: Compilation Xcode (Lien manuel vers Garmin)
         run: |
-          # On télécharge le SDK Garmin directement
-          git clone https://github.com/garmin/connectiq-companion-app-sdk-ios.git garmin-sdk
-          # On crée un dossier pour les frameworks dans le projet iOS
-          mkdir -p ios/App/Frameworks
-          # On copie le fichier .xcframework (le coeur du SDK)
-          cp -r garmin-sdk/ConnectIQ.xcframework ios/App/Frameworks/
-
+          cd ios/App
+          # On définit le chemin vers le framework de manière absolue pour Xcode
+          xcodebuild build \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -sdk iphoneos \
+            -configuration Release \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            FRAMEWORK_SEARCH_PATHS="$(inherited) '$(SRCROOT)/Frameworks'" \
+            OTHER_LDFLAGS="$(inherited) -framework ConnectIQ"
       - name: Préparation du HTML vide
         run: |
           mkdir -p www
