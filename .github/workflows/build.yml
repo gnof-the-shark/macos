@@ -18,6 +18,15 @@ jobs:
           npm install
           npx cap add ios
 
+      - name: Téléchargement Manuel du SDK Garmin
+        run: |
+          # On télécharge le SDK Garmin directement
+          git clone https://github.com/garmin/connectiq-companion-app-sdk-ios.git garmin-sdk
+          # On crée un dossier pour les frameworks dans le projet iOS
+          mkdir -p ios/App/Frameworks
+          # On copie le fichier .xcframework (le coeur du SDK)
+          cp -r garmin-sdk/ConnectIQ.xcframework ios/App/Frameworks/
+
       - name: Préparation du HTML vide
         run: |
           mkdir -p www
@@ -69,14 +78,9 @@ jobs:
           EOF
 
           echo -e "\n// --- CameraManager Logic ---" >> ios/App/App/AppDelegate.swift
-          if [ -f CameraManager.swift ]; then
-            grep -v "import " CameraManager.swift >> ios/App/App/AppDelegate.swift
-          else
-            echo "Error: CameraManager.swift not found"
-            exit 1
-          fi
+          grep -v "import " CameraManager.swift >> ios/App/App/AppDelegate.swift
 
-      - name: Configuration du SDK Garmin (Podfile)
+      - name: Configuration de Capacitor (Podfile sans Garmin)
         run: |
           cat <<'EOF' > ios/App/Podfile
           platform :ios, '13.0'
@@ -84,21 +88,23 @@ jobs:
             use_frameworks!
             pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
             pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
-            pod 'ConnectIQ', :git => 'https://github.com/garmin/connectiq-companion-app-sdk-ios.git'
           end
           EOF
           cd ios/App && pod install --repo-update
 
-      - name: Compilation Xcode (IPA non signé)
+      - name: Compilation Xcode (Lien manuel vers Garmin)
         run: |
           cd ios/App
+          # On dit à Xcode d'inclure le dossier Frameworks qu'on a créé
           xcodebuild build \
             -workspace App.xcworkspace \
             -scheme App \
             -sdk iphoneos \
             -configuration Release \
             CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO
+            CODE_SIGNING_REQUIRED=NO \
+            FRAMEWORK_SEARCH_PATHS="$(inherited) $(PROJECT_DIR)/Frameworks" \
+            OTHER_LDFLAGS="$(inherited) -framework ConnectIQ"
 
       - name: Création du fichier IPA
         run: |
