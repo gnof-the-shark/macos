@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Caméra</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; overflow: hidden; width: 100vw; height: 100vh; }
+    video {
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+    }
+    #error {
+      display: none;
+      color: #fff;
+      text-align: center;
+      padding: 20px;
+      font-family: -apple-system, sans-serif;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <video id="cam" autoplay playsinline muted></video>
+  <div id="error"></div>
+  <script>
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+      .then(function(stream) {
+        document.getElementById('cam').srcObject = stream;
+      })
+      .catch(function(err) {
+        var cam = document.getElementById('cam');
+        var msg = document.getElementById('error');
+        cam.style.display = 'none';
+        msg.style.display = 'block';
+        msg.textContent = 'Impossible d\'accéder à la caméra. Vérifiez les autorisations dans les réglages.';
+      });
+  </script>
+</body>
+</html>
