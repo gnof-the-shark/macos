@@ -7,12 +7,11 @@ workflows:
       node: latest
       xcode: latest
       cocoapods: default
-    scripts:
+scripts:
       - name: Install Dependencies
         script: | 
           npm install
-          # On s'assure que les plateformes sont à jour
-          npx cap add ios || true
+          npx cap add ios
           npx cap update ios
       
       - name: Download Garmin SDK
@@ -21,49 +20,46 @@ workflows:
           mkdir -p ios/App/Frameworks
           cp -r garmin-sdk/ConnectIQ.xcframework ios/App/Frameworks/
 
-      - name: Inject Native Swift Code
+      - name: Inject Camera Logic (Separate File)
         script: |
-          cat <<'EOF' > ios/App/App/AppDelegate.swift
+          # 1. On ne touche PAS au AppDelegate.swift original de Capacitor.
+          # 2. On crée un NOUVEAU fichier pour ta logique.
+          cat <<'EOF' > ios/App/App/CameraLogic.swift
           import UIKit
-          import Capacitor
           import AVFoundation
           import ConnectIQ
 
-          @UIApplicationMain
-          class AppDelegate: UIResponder, UIApplicationDelegate {
-              var window: UIWindow?
+          class CameraOverlay {
+              static let shared = CameraOverlay()
               lazy var cameraManager = CameraManager()
-              func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+
+              func show(on viewController: UIViewController) {
                   cameraManager.setup()
                   let previewLayer = AVCaptureVideoPreviewLayer(session: cameraManager.session)
                   previewLayer.videoGravity = .resizeAspectFill
-                  DispatchQueue.main.async {
-                      if let rootVC = self.window?.rootViewController {
-                          previewLayer.frame = rootVC.view.bounds
-                          rootVC.view.layer.insertSublayer(previewLayer, at: 0)
-                          rootVC.view.backgroundColor = .clear
-                          for subview in rootVC.view.subviews {
-                              subview.backgroundColor = .clear
-                          }
-                      }
-                  }
-                  return true
-              }
-          }
-          extension UIImage {
-              func resized(to size: CGSize) -> UIImage? {
-                  UIGraphicsBeginImageContextWithOptions(size, false, 0.0)
-                  draw(in: CGRect(origin: .zero, size: size))
-                  let newImage = UIGraphicsGetImageFromCurrentImageContext()
-                  UIGraphicsEndImageContext()
-                  return newImage
+                  previewLayer.frame = viewController.view.bounds
+                  viewController.view.layer.insertSublayer(previewLayer, at: 0)
+                  viewController.view.backgroundColor = .clear
               }
           }
           EOF
-          echo "\n" >> ios/App/App/AppDelegate.swift
-          if [ -f CameraManager.swift ]; then
-            grep -v "import " CameraManager.swift >> ios/App/App/AppDelegate.swift
-          fi
+
+          # 3. On ajoute ton CameraManager à la fin de ce nouveau fichier
+          echo "\n" >> ios/App/App/CameraLogic.swift
+          grep -v "import " CameraManager.swift >> ios/App/App/CameraLogic.swift
+
+          # 4. On utilise une extension pour injecter le lancement SANS casser Capacitor
+          cat <<'EOF' > ios/App/App/Injection.swift
+          import UIKit
+          import Capacitor
+
+          extension CAPBridgeViewController {
+              override open func viewDidAppear(_ animated: Bool) {
+                  super.viewDidAppear(animated)
+                  CameraOverlay.shared.show(on: self)
+              }
+          }
+          EOF
 
       - name: Configure Pods
         script: |
@@ -80,7 +76,6 @@ workflows:
       - name: Build iOS App (Unsigned)
         script: |
           cd ios/App
-          # On désactive l'indexation des modules explicites qui fait souvent planter Xcode sur les serveurs CI
           xcodebuild build \
             -workspace App.xcworkspace \
             -scheme App \
@@ -91,16 +86,6 @@ workflows:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
+            SWIFT_COMPILATION_MODE=wholemodule \
             FRAMEWORK_SEARCH_PATHS="$(inherited) '$(PROJECT_DIR)/Frameworks'" \
             OTHER_LDFLAGS="$(inherited) -framework ConnectIQ"
-
-      - name: Package IPA
-        script: |
-          mkdir -p Payload
-          # Recherche plus robuste de l'app compilée
-          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "App.app" -type d -path "*/Release-iphoneos/*" | head -n 1)
-          if [ -z "$APP_PATH" ]; then echo "App not found"; exit 1; fi
-          cp -r "$APP_PATH" Payload/
-          zip -r RemoteCam.ipa Payload
-    artifacts:
-      - "*.ipa"
