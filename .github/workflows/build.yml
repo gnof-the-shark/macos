@@ -1,4 +1,4 @@
-name: "Build Capacitor iOS"
+name: "Build Capacitor iOS with Icon"
 
 on:
   push:
@@ -23,24 +23,33 @@ jobs:
           npm install
           npx cap add ios
 
-      - name: Build Web & Sync Capacitor
+      - name: Generate Icons
+        run: |
+          # S'assure que le dossier resources existe avec ton icône
+          if [ -f resources/icon.png ]; then
+            npx capacitor-assets generate --ios
+          else
+            echo "Attention: resources/icon.png manquant, icône par défaut utilisée."
+          fi
+
+      - name: Build Web & Sync
         run: |
           mkdir -p www
-          # On crée un index.html minimal si vide
-          if [ ! -f www/index.html ]; then echo "<html><body>Camera Bridge Ready</body></html>" > www/index.html; fi
+          # On s'assure que l'index.html est là (évite l'écran blanc)
+          if [ ! -f www/index.html ]; then
+            echo "<!DOCTYPE html><html><body style='background:#000;color:#fff;display:flex;justify-content:center;align-items:center;height:100vh;'><h1>RemoteCam Active</h1></body></html>" > www/index.html
+          fi
           npx cap copy ios
           npx cap sync ios
 
       - name: Install Pods
         run: |
           cd ios/App
-          # Installation des dépendances natives Capacitor via CocoaPods
           pod install
 
       - name: Compile iOS App (Unsigned)
         run: |
           cd ios/App
-          # IMPORTANT : On utilise .xcworkspace maintenant, pas .xcodeproj
           xcodebuild build \
             -workspace App.xcworkspace \
             -scheme App \
@@ -50,16 +59,15 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             ENTITLEMENTS_REQUIRED=NO
 
-      - name: Create IPA for Sideloadly
+      - name: Create IPA
         run: |
           mkdir -p Payload
-          # Localiser le .app généré
           APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "App.app" -type d | head -n 1)
           cp -r "$APP_PATH" Payload/
-          zip -r RemoteCam_Capacitor.ipa Payload
+          zip -r RemoteCam_Final.ipa Payload
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: RemoteCam-Capacitor-IPA
-          path: RemoteCam_Capacitor.ipa
+          name: RemoteCam-Final-IPA
+          path: RemoteCam_Final.ipa
