@@ -103,6 +103,53 @@
       font-size: 15px;
       cursor: pointer;
     }
+
+    /* Photo preview modal */
+    #preview-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.82);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      z-index: 100;
+      padding: 24px;
+    }
+
+    #preview-modal.visible { display: flex; }
+
+    #preview-img {
+      max-width: 100%;
+      max-height: 65dvh;
+      border-radius: 12px;
+      box-shadow: 0 4px 32px rgba(0,0,0,0.6);
+    }
+
+    .modal-btns {
+      display: flex;
+      gap: 12px;
+    }
+
+    .modal-btns a, .modal-btns button {
+      padding: 12px 28px;
+      border-radius: 10px;
+      border: none;
+      font-size: 16px;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    #save-btn {
+      background: #0a84ff;
+      color: #fff;
+    }
+
+    #close-btn {
+      background: rgba(255,255,255,0.18);
+      color: #fff;
+    }
   </style>
 </head>
 <body>
@@ -126,6 +173,15 @@
     </div>
   </div>
 
+  <!-- Photo preview modal -->
+  <div id="preview-modal">
+    <img id="preview-img" alt="Photo capturée" />
+    <div class="modal-btns">
+      <a id="save-btn" download="">Enregistrer</a>
+      <button id="close-btn" onclick="closePreview()">Fermer</button>
+    </div>
+  </div>
+
   <script>
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
@@ -133,6 +189,11 @@
     const shutterBtn = document.getElementById('shutter-btn');
     const errorMsg = document.getElementById('error-msg');
     const errorText = document.getElementById('error-text');
+    const previewModal = document.getElementById('preview-modal');
+    const previewImg = document.getElementById('preview-img');
+    const saveBtn = document.getElementById('save-btn');
+
+    let currentObjectUrl = null;
 
     async function startCamera() {
       errorMsg.style.display = 'none';
@@ -153,21 +214,26 @@
       if (!video.srcObject) return;
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0);
+      canvas.getContext('2d').drawImage(video, 0, 0);
 
-      statusEl.textContent = 'Photo enregistrée !';
-      setTimeout(() => { statusEl.textContent = 'En attente de la montre…'; }, 2000);
-
-      // Trigger download
       canvas.toBlob(blob => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'photo_' + Date.now() + '.jpg';
-        a.click();
-        URL.revokeObjectURL(url);
+        // Release any previous object URL
+        if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
+        currentObjectUrl = URL.createObjectURL(blob);
+
+        const filename = 'photo_' + Date.now() + '.jpg';
+        previewImg.src = currentObjectUrl;
+        saveBtn.href = currentObjectUrl;
+        saveBtn.download = filename;
+
+        previewModal.classList.add('visible');
+        statusEl.textContent = 'Photo prise !';
       }, 'image/jpeg', 0.95);
+    }
+
+    function closePreview() {
+      previewModal.classList.remove('visible');
+      statusEl.textContent = 'En attente de la montre…';
     }
 
     shutterBtn.addEventListener('click', takePhoto);
