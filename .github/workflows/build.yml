@@ -15,16 +15,6 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
-      - name: Configure Git credentials for Swift Package Manager
-        run: |
-          git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
-
-      - name: Resolve Package Dependencies
-        run: |
-          xcodebuild -resolvePackageDependencies \
-            -project GarminPhoto.xcodeproj \
-            -scheme App
-
       - name: Build IPA
         run: |
           xcodebuild archive \
@@ -35,7 +25,8 @@ jobs:
             -sdk iphoneos \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            ENTITLEMENTS_REQUIRED=NO
+            ENTITLEMENTS_REQUIRED=NO \
+            ASSETCATALOG_COMPILER_APPICON_NAME=AppIcon
 
       - name: Package
         run: |

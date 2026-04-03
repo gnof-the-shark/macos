@@ -4,11 +4,6 @@ options:
   deploymentTarget:
     iOS: "15.0"
 
-packages:
-  ConnectIQ:
-    url: https://github.com/garmin/connectiq-companion-app-sdk-ios
-    from: 1.8.0
-
 targets:
   App:
     type: application
@@ -23,16 +18,11 @@ targets:
       path: Info.plist
       properties:
         UILaunchStoryboardName: ""
-        NSCameraUsageDescription: "Nécessaire pour prendre des photos déclenchées par la montre Garmin"
-        CFBundleDisplayName: "Garmin Photo"
-        CFBundleURLTypes:
-          - CFBundleTypeRole: Editor
-            CFBundleURLSchemes:
-              - garminphoto
+        NSCameraUsageDescription: "Nécessaire pour prendre des photos"
+        NSPhotoLibraryAddUsageDescription: "Pour sauvegarder les photos prises dans votre photothèque"
+        CFBundleDisplayName: "GarminPhoto"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.gnoftheshark.garminphoto
         SWIFT_VERSION: "5.0"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-    dependencies:
-      - package: ConnectIQ
