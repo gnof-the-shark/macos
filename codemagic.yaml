@@ -20,9 +20,8 @@ workflows:
           mkdir -p ios/App/Frameworks
           cp -r garmin-sdk/ConnectIQ.xcframework ios/App/Frameworks/
 
-      - name: Create CameraLogic & Inject Files
+      - name: Create Info.plist & Assets
         script: |
-          # 1. On crée le Info.plist (indispensable)
           mkdir -p ios/App/App
           cat <<'EOF' > ios/App/App/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
@@ -34,39 +33,15 @@ workflows:
             <key>CFBundleVersion</key><string>1</string>
             <key>CFBundlePackageType</key><string>APPL</string>
             <key>CFBundleExecutable</key><string>App</string>
-            <key>NSCameraUsageDescription</key><string>Accès caméra pour flux vidéo.</string>
-            <key>NSBluetoothAlwaysUsageDescription</key><string>Lien montre Garmin.</string>
+            <key>NSCameraUsageDescription</key><string>Accès caméra requis.</string>
+            <key>NSBluetoothAlwaysUsageDescription</key><string>Lien Garmin requis.</string>
           </dict></plist>
           EOF
-
-          # 2. AU LIEU DE GREP : On déplace simplement ton fichier dans le dossier iOS
-          # Cela évite de corrompre le code source.
           if [ -f CameraManager.swift ]; then
             cp CameraManager.swift ios/App/App/CameraManager.swift
           fi
 
-          # 3. On crée un pont propre entre Capacitor et ta caméra
-          cat <<'EOF' > ios/App/App/Injection.swift
-          import UIKit
-          import Capacitor
-
-          extension CAPBridgeViewController {
-              override open func viewDidAppear(_ animated: Bool) {
-                  super.viewDidAppear(animated)
-                  
-                  // On initialise la caméra sans modifier le fichier source
-                  let camera = CameraManager()
-                  camera.setup()
-                  
-                  let previewLayer = AVCaptureVideoPreviewLayer(session: camera.session)
-                  previewLayer.videoGravity = .resizeAspectFill
-                  previewLayer.frame = self.view.bounds
-                  self.view.layer.insertSublayer(previewLayer, at: 0)
-              }
-          }
-          EOF
-
-      - name: Configure Pods
+      - name: Configure Pods (Anti-Crash Fix)
         script: |
           cat <<'EOF' > ios/App/Podfile
           platform :ios, '14.0'
@@ -75,18 +50,24 @@ workflows:
             pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
             pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
           end
+
+          post_install do |installer|
+            installer.pods_project.targets.each do |target|
+              target.build_configurations.each do |config|
+                config.build_settings['SWIFT_COMPILATION_MODE'] = 'singlefile'
+                config.build_settings['SWIFT_OPTIMIZATION_LEVEL'] = '-Onone'
+                config.build_settings['ARCHS'] = 'arm64'
+              end
+            end
+          end
           EOF
           cd ios/App && pod install --repo-update
 
-      - name: Build iOS App (Ultra-Stable)
+      - name: Build iOS App (Safe Mode)
         script: |
           cd ios/App
           mkdir -p build_output
           
-          # 1. On nettoie le cache des modules Swift qui fait planter le Driver
-          rm -rf build_output/ModuleCache.noindex
-          
-          # 2. Compilation avec options de stabilité CI
           xcodebuild build \
             -workspace App.xcworkspace \
             -scheme App \
@@ -99,14 +80,12 @@ workflows:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            SWIFT_COMPILATION_MODE=wholemodule \
             SWIFT_USE_INTEGRATED_DRIVER=NO \
             FRAMEWORK_SEARCH_PATHS="$(inherited) '$(PROJECT_DIR)/Frameworks'" \
             OTHER_LDFLAGS="$(inherited) -framework ConnectIQ"
-
+            
       - name: Package IPA
         script: |
-          rm -rf Payload RemoteCam.ipa
           mkdir -p Payload
           APP_PATH=$(find ios/App/build_output -name "*.app" -type d | head -n 1)
           cp -r "$APP_PATH" Payload/
