@@ -35,13 +35,13 @@ jobs:
           npx cap copy ios
           npx cap sync ios
 
-      - name: Fusion du Code Swift
+    - name: Fusion du Code Swift
         run: |
-          # 1. On prépare le début du fichier AppDelegate
           cat <<EOF > ios/App/App/AppDelegate.swift
           import UIKit
           import Capacitor
           import AVFoundation
+          import ConnectIQ // <--- Ajouté
 
           @UIApplicationMain
           class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -71,12 +71,20 @@ jobs:
               }
           }
 
+          // Extension pour corriger l'erreur .resized()
+          extension UIImage {
+              func resized(to size: CGSize) -> UIImage? {
+                  UIGraphicsBeginImageContextWithOptions(size, false, 0.0)
+                  draw(in: CGRect(origin: .zero, size: size))
+                  let newImage = UIGraphicsGetImageFromCurrentImageContext()
+                  UIGraphicsEndImageContext()
+                  return newImage
+              }
+          }
+
           // --- FUSION DU CODE CAMERAMANAGER ---
           EOF
-
-          # 2. On ajoute le contenu de ton CameraManager.swift à la suite (en retirant les imports doublons)
           grep -v "import " CameraManager.swift >> ios/App/App/AppDelegate.swift
-
       - name: Install Pods
         run: |
           cd ios/App
