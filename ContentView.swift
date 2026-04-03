@@ -47,9 +47,12 @@ struct ContentView: View {
 }
 
 // Logique de la caméra et de la connexion Garmin
-class CameraManager: NSObject, ObservableObject, IQDeviceEventDelegate {
+class CameraManager: NSObject, ObservableObject, IQDeviceEventDelegate, IQAppMessageDelegate {
     let session = AVCaptureSession()
     private let photoOutput = AVCapturePhotoOutput()
+    
+    // UUID de l'app Connect IQ sur la montre (à remplacer par votre propre App ID)
+    private let garminAppID = UUID(uuidString: "MY_GARMIN_APP_ID")!
     
     func checkPermissions() {
         // Code pour demander l'accès à la caméra
@@ -84,15 +87,24 @@ class CameraManager: NSObject, ObservableObject, IQDeviceEventDelegate {
     }
     
     func registerForKnownDeviceEvents() {
-        // Enregistrement pour recevoir les messages de chaque montre connue
+        // Enregistrement pour recevoir les événements et messages de chaque montre connue
         guard let devices = ConnectIQ.sharedInstance().getKnownDevices() as? [IQDevice] else { return }
         for device in devices {
             ConnectIQ.sharedInstance().register(forDeviceEvents: device, delegate: self)
+            let app = IQApp(id: garminAppID, uuid: garminAppID, device: device)
+            ConnectIQ.sharedInstance().register(forAppMessages: app, delegate: self)
         }
     }
     
-    // Déclenché par la montre
+    // Déclenché par la montre (IQDeviceEventDelegate – ancienne API)
     func deviceAppMessageReceived(_ message: Any, from device: IQDevice) {
+        if let dict = message as? [String: Any], dict["command"] as? String == "TAKE_PHOTO" {
+            takePhoto()
+        }
+    }
+    
+    // Déclenché par la montre (IQAppMessageDelegate)
+    func receivedMessage(_ message: Any, fromApp app: IQApp) {
         if let dict = message as? [String: Any], dict["command"] as? String == "TAKE_PHOTO" {
             takePhoto()
         }
