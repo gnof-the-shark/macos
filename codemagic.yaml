@@ -24,10 +24,9 @@ workflows:
 
       - name: Setup iOS Files (Plist & Camera)
         script: |
-          # 1. Création du dossier de l'app
           mkdir -p ios/App/App
           
-          # 2. Génération du Info.plist indispensable
+          # 1. Génération du Info.plist principal
           cat <<'EOF' > ios/App/App/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -43,12 +42,12 @@ workflows:
           </dict></plist>
           EOF
 
-          # 3. Copie du CameraManager.swift (SANS modification pour éviter les erreurs de syntaxe)
+          # 2. Copie du CameraManager.swift
           if [ -f CameraManager.swift ]; then
             cp CameraManager.swift ios/App/App/CameraManager.swift
           fi
 
-          # 4. Injection de la logique de démarrage via extension
+          # 3. Injection de la logique de démarrage
           cat <<'EOF' > ios/App/App/Injection.swift
           import UIKit
           import Capacitor
@@ -57,11 +56,8 @@ workflows:
           extension CAPBridgeViewController {
               override open func viewDidAppear(_ animated: Bool) {
                   super.viewDidAppear(animated)
-                  
-                  // On initialise la caméra par-dessus la vue Capacitor
                   let camera = CameraManager()
                   camera.setup()
-                  
                   let previewLayer = AVCaptureVideoPreviewLayer(session: camera.session)
                   previewLayer.videoGravity = .resizeAspectFill
                   previewLayer.frame = self.view.bounds
@@ -71,7 +67,7 @@ workflows:
           }
           EOF
 
-      - name: Configure Pods (Anti-Crash)
+      - name: Configure Pods (Anti-Crash & Plist Fix)
         script: |
           cat <<'EOF' > ios/App/Podfile
           platform :ios, '14.0'
@@ -87,16 +83,25 @@ workflows:
               target.build_configurations.each do |config|
                 config.build_settings['SWIFT_VERSION'] = '5.0'
                 config.build_settings['ENABLE_BITCODE'] = 'NO'
-                # On force la compilation fichier par fichier pour éviter le Signal 6 (crash compilateur)
+                # Correction pour CapacitorCordova et Info.plist
+                if target.name == 'CapacitorCordova'
+                  config.build_settings['INFOPLIST_FILE'] = '$(SRCROOT)/../App/Info.plist'
+                end
+                # Protection contre le Signal 6 (crash compilateur)
                 config.build_settings['SWIFT_COMPILATION_MODE'] = 'singlefile'
                 config.build_settings['SWIFT_OPTIMIZATION_LEVEL'] = '-Onone'
               end
             end
           end
           EOF
+          
+          # Créer physiquement le dossier attendu par sécurité
+          mkdir -p ios/App/Pods/App
+          cp ios/App/App/Info.plist ios/App/Pods/App/Info.plist
+          
           cd ios/App && pod install --repo-update
 
-      - name: Build iOS App (Final)
+      - name: Build iOS App (Final Fix)
         script: |
           cd ios/App
           mkdir -p build_output
@@ -115,13 +120,13 @@ workflows:
             ARCHS="arm64" \
             SWIFT_USE_INTEGRATED_DRIVER=NO \
             INFOPLIST_FILE="App/Info.plist" \
+            PODS_ROOT="$(PROJECT_DIR)/Pods" \
             FRAMEWORK_SEARCH_PATHS="$(inherited) '$(PROJECT_DIR)/Frameworks'" \
             OTHER_LDFLAGS="$(inherited) -framework ConnectIQ"
 
       - name: Package IPA
         script: |
           mkdir -p Payload
-          # On récupère l'exécutable compilé
           APP_PATH=$(find ios/App/build_output -name "*.app" -type d | head -n 1)
           cp -r "$APP_PATH" Payload/
           zip -r RemoteCam.ipa Payload
