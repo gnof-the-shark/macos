@@ -2,8 +2,7 @@ import SwiftUI
 import AVFoundation
 import ConnectIQ
 
-// Remplacez par l'UUID de votre application Garmin watch
-private let garminAppUUID = NSUUID(uuidString: "00000000-0000-0000-0000-000000000000") ?? NSUUID()
+private let garminAppUUID = NSUUID(uuidString: "5e59696a-c38b-4afe-b787-9433a22bfae2")!
 
 struct ContentView: View {
     @StateObject private var cameraManager = CameraManager()
