@@ -31,6 +31,8 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             FRAMEWORK_SEARCH_PATHS="$(inherited) '$(SRCROOT)/Frameworks'" \
             OTHER_LDFLAGS="$(inherited) -framework ConnectIQ"
+
+            
       - name: Préparation du HTML vide
         run: |
           mkdir -p www
