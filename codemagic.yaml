@@ -22,8 +22,8 @@ workflows:
 
       - name: Create Info.plist & Inject Logic
         script: |
-          # Création du Info.plist à la racine du projet iOS
-          cat <<'EOF' > ios/App/App/Info.plist
+          # 1. On crée le fichier de base
+          cat <<'EOF' > base_info.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0"><dict>
@@ -38,7 +38,13 @@ workflows:
           </dict></plist>
           EOF
 
-          # Injection de ton code caméra
+          # 2. On le déploie PARTOUT pour satisfaire Xcode et les Pods
+          mkdir -p ios/App/App
+          mkdir -p ios/App/Pods/App
+          cp base_info.plist ios/App/App/Info.plist
+          cp base_info.plist ios/App/Pods/App/Info.plist
+
+          # 3. Injection de ton code caméra (sans changement ici)
           cat <<'EOF' > ios/App/App/CameraLogic.swift
           import UIKit
           import AVFoundation
@@ -72,12 +78,10 @@ workflows:
           EOF
           cd ios/App && pod install --repo-update
 
-      - name: Build iOS App (Target Specific)
+      - name: Build iOS App (Final Fix)
         script: |
           cd ios/App
           mkdir -p build_output
-          
-          # On définit le chemin du Plist uniquement pour la cible "App"
           xcodebuild build \
             -workspace App.xcworkspace \
             -scheme App \
@@ -89,10 +93,9 @@ workflows:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            ASSETCATALOG_COMPILER_APPICON_NAME=AppIcon \
+            INFOPLIST_FILE="App/Info.plist" \
             FRAMEWORK_SEARCH_PATHS="$(inherited) '$(PROJECT_DIR)/Frameworks'" \
-            OTHER_LDFLAGS="$(inherited) -framework ConnectIQ" \
-            INFOPLIST_FILE="App/Info.plist"
+            OTHER_LDFLAGS="$(inherited) -framework ConnectIQ"
 
       - name: Package IPA
         script: |
