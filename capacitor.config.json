@@ -1,0 +1,8 @@
+{
+  "appId": "com.gnoftheshark.garminphoto",
+  "appName": "Garmin Photo",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "always"
+  }
+}
