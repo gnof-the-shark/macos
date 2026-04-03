@@ -4,26 +4,38 @@ on: [push]
 jobs:
   build:
     runs-on: macos-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 24
 
-      - name: Install npm dependencies
+      - name: Install Capacitor
         run: npm install
 
-      - name: Add iOS platform via Capacitor
-        run: npx cap add ios
+      - name: Prepare Web Assets
+        run: |
+          mkdir -p www
+          cp index.html www/ 2>/dev/null || true
+          echo "Contenu du dossier www :"
+          ls www
 
-      - name: Build IPA
+      - name: Setup iOS Project
+        run: |
+          rm -rf ios
+          npx cap add ios
+          npx cap sync ios
+
+      - name: Build Xcode Archive
         run: |
           xcodebuild archive \
-            -project ios/App/App.xcodeproj \
+            -workspace ios/App/App.xcworkspace \
             -scheme App \
             -configuration Debug \
             -archivePath GarminPhoto.xcarchive \
@@ -32,13 +44,13 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             ENTITLEMENTS_REQUIRED=NO
 
-      - name: Package
+      - name: Package IPA
         run: |
           mkdir -p Payload
           cp -r GarminPhoto.xcarchive/Products/Applications/App.app Payload/
           zip -r GarminPhoto.ipa Payload/
 
-      - name: Upload
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Garmin-Photo-IPA
