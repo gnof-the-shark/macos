@@ -5,23 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RemoteCam</title>
     <style>
-        body { 
-            background-color: #1a1a1a; 
-            color: white; 
-            display: flex; 
-            flex-direction: column;
-            justify-content: center; 
-            align-items: center; 
-            height: 100vh; 
-            margin: 0; 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        }
-        .status { color: #00ff00; font-weight: bold; margin-top: 10px; }
+        /* On rend le fond transparent pour voir la caméra derrière */
+        body { background-color: transparent !important; color: white; text-align: center; font-family: sans-serif; }
+        .ui-layer { background: rgba(0,0,0,0.4); padding: 20px; border-radius: 15px; margin: 20px; }
+        .status { color: #00ff00; font-weight: bold; }
     </style>
 </head>
 <body>
-    <h1>RemoteCam Garmin</h1>
-    <div class="status">Interface Web Chargée</div>
-    <p>En attente du flux caméra...</p>
+    <div class="ui-layer">
+        <h1>RemoteCam</h1>
+        <div id="status" class="status">Caméra Active</div>
+        <p>Flux en cours vers Garmin...</p>
+    </div>
+
+    <script>
+        // Ce code dit à Capacitor de rendre le WebView transparent
+        // pour que la couche native (la caméra) apparaisse
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log("App prête");
+            // Ici, on pourrait ajouter un appel vers un plugin
+        });
+    </script>
 </body>
 </html>
