@@ -82,7 +82,7 @@ scripts:
             FRAMEWORK_SEARCH_PATHS="$(inherited) '$(PROJECT_DIR)/Frameworks'" \
             OTHER_LDFLAGS="$(inherited) -framework ConnectIQ"
 
-    - name: Package IPA
+      - name: Package IPA
         script: |
           # On nettoie les anciens essais
           rm -rf Payload RemoteCam.ipa
