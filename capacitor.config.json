@@ -1,0 +1,6 @@
+{
+  "appId": "com.gnof.remotecam",
+  "appName": "RemoteCam",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}
