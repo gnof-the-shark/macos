@@ -31,6 +31,11 @@ struct ContentView: UIViewRepresentable {
             type: WKMediaCaptureType,
             decisionHandler: @escaping (WKPermissionDecision) -> Void
         ) {
+            // Only grant camera access to the locally bundled HTML file.
+            guard origin.protocol == "file", type == .camera else {
+                decisionHandler(.deny)
+                return
+            }
             decisionHandler(.grant)
         }
     }
