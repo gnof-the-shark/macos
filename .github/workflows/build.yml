@@ -97,10 +97,38 @@ jobs:
             exit 1
           fi
 
-      - name: Install Pods (Garmin SDK)
+- name: Install Pods (Garmin SDK)
         run: |
           cd ios/App
           pod install --repo-update
+
+      - name: Compilation Xcode (Unsigned)
+        run: |
+          cd ios/App
+          # On ajoute explicitement le chemin des Pods pour que ConnectIQ soit trouvé
+          xcodebuild build \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -sdk iphoneos \
+            -configuration Release \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            ENTITLEMENTS_REQUIRED=NO \
+            FRAMEWORK_SEARCH_PATHS="$(inherited) $(PROJECT_DIR)/Pods/**"
+
+      - name: Creation de l'IPA
+        run: |
+          mkdir -p Payload
+          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "App.app" -type d | head -n 1)
+          if [ -z "$APP_PATH" ]; then echo "Erreur: App.app introuvable"; exit 1; fi
+          cp -r "$APP_PATH" Payload/
+          zip -r RemoteCam_Final.ipa Payload
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RemoteCam-iOS-IPA
+          path: RemoteCam_Final.ipa
 
       - name: Compilation Xcode (Unsigned)
         run: |
