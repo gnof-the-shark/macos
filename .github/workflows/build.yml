@@ -1,4 +1,4 @@
-name: Build Sport App IPA
+name: Build Garmin Photo IPA
 on: [push]
 
 jobs:
@@ -18,16 +18,16 @@ jobs:
       - name: Resolve Package Dependencies
         run: |
           xcodebuild -resolvePackageDependencies \
-            -project SportTracker.xcodeproj \
+            -project GarminPhoto.xcodeproj \
             -scheme App
 
       - name: Build IPA
         run: |
           xcodebuild archive \
-            -project SportTracker.xcodeproj \
+            -project GarminPhoto.xcodeproj \
             -scheme App \
             -configuration Debug \
-            -archivePath SportApp.xcarchive \
+            -archivePath GarminPhoto.xcarchive \
             -sdk iphoneos \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
@@ -36,12 +36,12 @@ jobs:
       - name: Package
         run: |
           mkdir -p Payload
-          cp -r SportApp.xcarchive/Products/Applications/App.app Payload/
-          zip -r SportTracker.ipa Payload/
+          cp -r GarminPhoto.xcarchive/Products/Applications/App.app Payload/
+          zip -r GarminPhoto.ipa Payload/
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Sport-App-IPA
-          path: SportTracker.ipa
+          name: Garmin-Photo-IPA
+          path: GarminPhoto.ipa
 

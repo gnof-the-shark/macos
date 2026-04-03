@@ -1,4 +1,4 @@
-name: SportTracker
+name: GarminPhoto
 options:
   bundleIdPrefix: com.gnoftheshark
   deploymentTarget:
@@ -24,13 +24,14 @@ targets:
       properties:
         UILaunchStoryboardName: ""
         NSCameraUsageDescription: "Nécessaire pour prendre des photos déclenchées par la montre Garmin"
+        CFBundleDisplayName: "Garmin Photo"
         CFBundleURLTypes:
           - CFBundleTypeRole: Editor
             CFBundleURLSchemes:
-              - sporttracker
+              - garminphoto
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.gnoftheshark.sporttracker
+        PRODUCT_BUNDLE_IDENTIFIER: com.gnoftheshark.garminphoto
         SWIFT_VERSION: "5.0"
     dependencies:
       - package: ConnectIQ
