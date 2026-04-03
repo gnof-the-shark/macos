@@ -1,0 +1,12 @@
+platform :ios, '13.0'
+
+target 'App' do
+  use_frameworks!
+
+  # Les dépendances standards de Capacitor
+  pod 'Capacitor', :path => 'node_modules/@capacitor/ios'
+  pod 'CapacitorCordova', :path => 'node_modules/@capacitor/ios'
+
+  # L'AJOUT CRUCIAL : Le SDK Garmin Connect IQ
+  pod 'ConnectIQ', :git => 'https://github.com/garmin/connectiq-companion-app-sdk-ios.git'
+end
