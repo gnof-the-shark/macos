@@ -4,13 +4,16 @@ workflows:
     max_build_duration: 30
     instance_type: mac_mini_m1
     environment:
-      node: latest
-      xcode: latest
+      node: 18 # On fixe une version stable de Node
+      xcode: 15.2 # On fixe une version de Xcode stable
       cocoapods: default
     scripts:
-      - name: Install Dependencies
+      - name: Install Dependencies & Clean
         script: | 
           npm install
+          # On s'assure que le dossier iOS est propre
+          rm -rf ios/App/Pods
+          rm -rf ios/App/App.xcworkspace
           npx cap add ios
           npx cap update ios
       
@@ -33,57 +36,62 @@ workflows:
             <key>CFBundleVersion</key><string>1</string>
             <key>CFBundlePackageType</key><string>APPL</string>
             <key>CFBundleExecutable</key><string>App</string>
-            <key>NSCameraUsageDescription</key><string>Accès caméra requis.</string>
-            <key>NSBluetoothAlwaysUsageDescription</key><string>Lien Garmin requis.</string>
+            <key>NSCameraUsageDescription</key><string>Accès caméra.</string>
+            <key>NSBluetoothAlwaysUsageDescription</key><string>Lien Garmin.</string>
           </dict></plist>
           EOF
           if [ -f CameraManager.swift ]; then
             cp CameraManager.swift ios/App/App/CameraManager.swift
           fi
 
-      - name: Configure Pods (Anti-Crash Fix)
+      - name: Configure Pods (Direct Network Mode)
         script: |
           cat <<'EOF' > ios/App/Podfile
           platform :ios, '14.0'
+          use_frameworks!
+
           target 'App' do
-            use_frameworks!
-            pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
-            pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
+            # On demande les versions officielles au lieu des fichiers locaux
+            pod 'Capacitor'
+            pod 'CapacitorCordova'
           end
 
           post_install do |installer|
             installer.pods_project.targets.each do |target|
               target.build_configurations.each do |config|
-                config.build_settings['SWIFT_COMPILATION_MODE'] = 'singlefile'
+                config.build_settings['SWIFT_VERSION'] = '5.0'
+                config.build_settings['ENABLE_BITCODE'] = 'NO'
+                config.build_settings['SKIP_INSTALL'] = 'NO'
+                # On désactive l'optimisation pour éviter le Signal 6
                 config.build_settings['SWIFT_OPTIMIZATION_LEVEL'] = '-Onone'
-                config.build_settings['ARCHS'] = 'arm64'
+                config.build_settings['SWIFT_COMPILATION_MODE'] = 'singlefile'
               end
             end
           end
           EOF
           cd ios/App && pod install --repo-update
 
-      - name: Build iOS App (Safe Mode)
+      - name: Build iOS App (Zero Indexing)
         script: |
           cd ios/App
           mkdir -p build_output
           
+          # On compile en ignorant totalement l'indexation (source de crash)
           xcodebuild build \
             -workspace App.xcworkspace \
             -scheme App \
             -sdk iphoneos \
             -configuration Release \
             -derivedDataPath build_output \
-            -jobs 1 \
-            ARCHS="arm64" \
-            ONLY_ACTIVE_ARCH=YES \
+            COMPILER_INDEX_STORE_ENABLE=NO \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            COMPILER_INDEX_STORE_ENABLE=NO \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES \
+            ARCHS="arm64" \
             SWIFT_USE_INTEGRATED_DRIVER=NO \
-            FRAMEWORK_SEARCH_PATHS="$(inherited) '$(PROJECT_DIR)/Frameworks'" \
-            OTHER_LDFLAGS="$(inherited) -framework ConnectIQ"
-            
+            OTHER_LDFLAGS="$(inherited) -framework ConnectIQ" \
+            | xcbeautify
+
       - name: Package IPA
         script: |
           mkdir -p Payload
