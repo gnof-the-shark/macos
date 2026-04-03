@@ -24,9 +24,10 @@ workflows:
 
       - name: Setup iOS Files (Plist & Camera)
         script: |
+          # 1. Création du dossier de l'app
           mkdir -p ios/App/App
           
-          # 1. Génération du Info.plist principal
+          # 2. Génération du Info.plist indispensable
           cat <<'EOF' > ios/App/App/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -42,12 +43,12 @@ workflows:
           </dict></plist>
           EOF
 
-          # 2. Copie du CameraManager.swift
+          # 3. Copie du CameraManager.swift
           if [ -f CameraManager.swift ]; then
             cp CameraManager.swift ios/App/App/CameraManager.swift
           fi
 
-          # 3. Injection de la logique de démarrage
+          # 4. Injection de la logique de démarrage via extension
           cat <<'EOF' > ios/App/App/Injection.swift
           import UIKit
           import Capacitor
@@ -56,8 +57,10 @@ workflows:
           extension CAPBridgeViewController {
               override open func viewDidAppear(_ animated: Bool) {
                   super.viewDidAppear(animated)
+                  
                   let camera = CameraManager()
                   camera.setup()
+                  
                   let previewLayer = AVCaptureVideoPreviewLayer(session: camera.session)
                   previewLayer.videoGravity = .resizeAspectFill
                   previewLayer.frame = self.view.bounds
@@ -67,7 +70,7 @@ workflows:
           }
           EOF
 
-      - name: Configure Pods (Anti-Crash & Plist Fix)
+      - name: Configure Pods (Anti-Crash)
         script: |
           cat <<'EOF' > ios/App/Podfile
           platform :ios, '14.0'
@@ -83,25 +86,27 @@ workflows:
               target.build_configurations.each do |config|
                 config.build_settings['SWIFT_VERSION'] = '5.0'
                 config.build_settings['ENABLE_BITCODE'] = 'NO'
-                # Correction pour CapacitorCordova et Info.plist
-                if target.name == 'CapacitorCordova'
-                  config.build_settings['INFOPLIST_FILE'] = '$(SRCROOT)/../App/Info.plist'
-                end
-                # Protection contre le Signal 6 (crash compilateur)
                 config.build_settings['SWIFT_COMPILATION_MODE'] = 'singlefile'
                 config.build_settings['SWIFT_OPTIMIZATION_LEVEL'] = '-Onone'
+
+                # CORRECTIF : forcer CapacitorCordova à utiliser le bon Info.plist
+                # au lieu du chemin fantôme Pods/App/Info.plist
+                if target.name == 'CapacitorCordova'
+                  config.build_settings['INFOPLIST_FILE'] = '$(SRCROOT)/App/Info.plist'
+                end
               end
             end
           end
           EOF
-          
-          # Créer physiquement le dossier attendu par sécurité
+
+          # Créer aussi le dossier Pods/App avec un Info.plist de secours
+          # au cas où Xcode le résolve avant le post_install
           mkdir -p ios/App/Pods/App
           cp ios/App/App/Info.plist ios/App/Pods/App/Info.plist
-          
+
           cd ios/App && pod install --repo-update
 
-      - name: Build iOS App (Final Fix)
+      - name: Build iOS App (Final)
         script: |
           cd ios/App
           mkdir -p build_output
@@ -120,7 +125,6 @@ workflows:
             ARCHS="arm64" \
             SWIFT_USE_INTEGRATED_DRIVER=NO \
             INFOPLIST_FILE="App/Info.plist" \
-            PODS_ROOT="$(PROJECT_DIR)/Pods" \
             FRAMEWORK_SEARCH_PATHS="$(inherited) '$(PROJECT_DIR)/Frameworks'" \
             OTHER_LDFLAGS="$(inherited) -framework ConnectIQ"
 
