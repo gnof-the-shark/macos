@@ -51,12 +51,8 @@ class CameraManager: NSObject, ObservableObject, IQDeviceEventDelegate {
     
     func setupGarmin() {
         // Initialisation du SDK ConnectIQ pour écouter "TAKE_PHOTO"
-        autoreleasepool {
-            let devices = ConnectIQ.sharedInstance().getKnownDevices() as? [IQDevice]
-            for device in devices ?? [] {
-                ConnectIQ.sharedInstance().register(forDeviceEvents: device, delegate: self)
-            }
-        }
+        guard let ciq = ConnectIQ.sharedInstance() else { return }
+        ciq.showConnectIQDeviceSelection()
     }
     
     // Déclenché par la montre
