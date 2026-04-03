@@ -2,7 +2,7 @@ import SwiftUI
 import AVFoundation
 import ConnectIQ
 
-private let garminAppUUID = NSUUID(uuidString: "5e59696a-c38b-4afe-b787-9433a22bfae2")!
+private let garminAppUUID = UUID(uuidString: "5e59696a-c38b-4afe-b787-9433a22bfae2")!
 
 struct ContentView: View {
     @StateObject private var cameraManager = CameraManager()
@@ -65,11 +65,11 @@ class CameraManager: NSObject, ObservableObject, IQAppMessageDelegate {
     }
 
     func setupGarmin() {
-        ConnectIQ.sharedInstance().showConnectIQDeviceSelection()
+        ConnectIQ.sharedInstance().showDeviceSelection()
     }
 
     func setupIQApp(for device: IQDevice) {
-        let app = IQApp(uuid: garminAppUUID, storeUuid: garminAppUUID, device: device)
+        let app = IQApp(uuid: garminAppUUID, store: garminAppUUID, device: device)
         iqApp = app
         ConnectIQ.sharedInstance().register(forAppMessages: app, delegate: self)
     }
@@ -88,7 +88,7 @@ class CameraManager: NSObject, ObservableObject, IQAppMessageDelegate {
         let base64String = jpegData.base64EncodedString()
         ConnectIQ.sharedInstance().sendMessage(
             base64String,
-            toApp: app,
+            to: app,
             progress: { sentBytes, totalBytes in
                 print("Envoi de l'aperçu: \(sentBytes)/\(totalBytes)")
             },
