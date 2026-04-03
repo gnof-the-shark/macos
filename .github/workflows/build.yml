@@ -1,19 +1,46 @@
-- name: Build with Swift
-        run: |
-          # On compile directement les fichiers Swift en un exécutable iOS
-          xcrun -sdk iphoneos swiftc *.swift \
-            -o RemoteCamBinaire \
-            -target arm64-apple-ios15.0 \
-            -sdk $(xcrun --sdk iphoneos --show-sdk-path) \
-            -emit-executable
+name: "Build IPA for Sideloadly"
 
-      - name: Prepare IPA for Sideloadly
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: 'latest-stable'
+
+      - name: Compile Swift Project
+        run: |
+          # Compilation du binaire pour processeur ARM64 (iPhone)
+          swift build -c release --triple arm64-apple-ios15.0-simulator 
+          # Note: On utilise le SDK iphoneos pour un vrai build
+          xcodebuild -scheme RemoteCam -destination 'generic/platform=iOS' -configuration Release build CODE_SIGNING_ALLOWED=NO
+
+      - name: Create IPA Structure
         run: |
           mkdir -p Payload/RemoteCam.app
-          # On déplace le binaire et les infos nécessaires
-          mv RemoteCamBinaire Payload/RemoteCam.app/RemoteCam
-          cp Info.plist Payload/RemoteCam.app/
-          # Optionnel: Si tu as des icônes, il faudrait les compiler, 
-          # mais pour Sideloadly, le binaire et l'Info.plist suffisent pour tester.
           
+          # Trouver le binaire compilé
+          APP_BINARY=$(find .build -name "RemoteCam" -type f | head -n 1)
+          cp "$APP_BINARY" Payload/RemoteCam.app/RemoteCam
+          
+          # Copier les ressources essentielles
+          cp Info.plist Payload/RemoteCam.app/
+          
+          # Créer l'IPA
           zip -r RemoteCam_Unsigned.ipa Payload
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RemoteCam-IPA
+          path: RemoteCam_Unsigned.ipa
