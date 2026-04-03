@@ -9,7 +9,7 @@ workflows:
       cocoapods: default
     scripts:
       - name: Install Dependencies
-        script: | 
+        script: |
           npm install
           npx cap add ios
       
@@ -21,7 +21,6 @@ workflows:
 
       - name: Inject Native Swift Code
         script: |
-          # Création du AppDelegate complet
           cat <<'EOF' > ios/App/App/AppDelegate.swift
           import UIKit
           import Capacitor
@@ -59,7 +58,6 @@ workflows:
               }
           }
           EOF
-          # Ajout de ton CameraManager (assure-toi que le fichier existe à la racine)
           echo "\n" >> ios/App/App/AppDelegate.swift
           grep -v "import " CameraManager.swift >> ios/App/App/AppDelegate.swift
 
@@ -75,13 +73,9 @@ workflows:
           EOF
           cd ios/App && pod install --repo-update
 
-- name: Build iOS App (Unsigned)
+      - name: Build iOS App (Unsigned)
         script: |
           cd ios/App
-          # On nettoie avant de compiler pour éviter les résidus
-          xcodebuild clean 
-          
-          # On compile en ignorant les erreurs de signature et en ciblant uniquement l'iPhone (arm64)
           xcodebuild build \
             -workspace App.xcworkspace \
             -scheme App \
@@ -91,12 +85,8 @@ workflows:
             ONLY_ACTIVE_ARCH=YES \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_ENTITLEMENTS="" \
-            CODE_SIGNING_IDENTITY="" \
             FRAMEWORK_SEARCH_PATHS="$(inherited) '$(PROJECT_DIR)/Frameworks'" \
-            OTHER_LDFLAGS="$(inherited) -framework ConnectIQ" \
-            SWIFT_VERSION=5.0 \
-            -allowProvisioningUpdates
+            OTHER_LDFLAGS="$(inherited) -framework ConnectIQ"
 
       - name: Package IPA
         script: |
