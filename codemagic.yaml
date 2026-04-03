@@ -20,13 +20,29 @@ workflows:
           mkdir -p ios/App/Frameworks
           cp -r garmin-sdk/ConnectIQ.xcframework ios/App/Frameworks/
 
-      - name: Inject Camera Logic (Separate File)
+      - name: Create Info.plist & Inject Logic
         script: |
+          # Création du Info.plist à la racine du projet iOS
+          cat <<'EOF' > ios/App/App/Info.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>CFBundleIdentifier</key><string>com.remotecam.app</string>
+            <key>CFBundleName</key><string>RemoteCam</string>
+            <key>CFBundleShortVersionString</key><string>1.0</string>
+            <key>CFBundleVersion</key><string>1</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleExecutable</key><string>App</string>
+            <key>NSCameraUsageDescription</key><string>Accès caméra pour flux vidéo.</string>
+            <key>NSBluetoothAlwaysUsageDescription</key><string>Lien montre Garmin.</string>
+          </dict></plist>
+          EOF
+
+          # Injection de ton code caméra
           cat <<'EOF' > ios/App/App/CameraLogic.swift
           import UIKit
           import AVFoundation
           import ConnectIQ
-
           class CameraOverlay {
               static let shared = CameraOverlay()
               lazy var cameraManager = CameraManager()
@@ -36,24 +52,13 @@ workflows:
                   previewLayer.videoGravity = .resizeAspectFill
                   previewLayer.frame = viewController.view.bounds
                   viewController.view.layer.insertSublayer(previewLayer, at: 0)
-                  viewController.view.backgroundColor = .clear
               }
           }
           EOF
-          echo "\n" >> ios/App/App/CameraLogic.swift
           if [ -f CameraManager.swift ]; then
+            echo "\n" >> ios/App/App/CameraLogic.swift
             grep -v "import " CameraManager.swift >> ios/App/App/CameraLogic.swift
           fi
-          cat <<'EOF' > ios/App/App/Injection.swift
-          import UIKit
-          import Capacitor
-          extension CAPBridgeViewController {
-              override open func viewDidAppear(_ animated: Bool) {
-                  super.viewDidAppear(animated)
-                  CameraOverlay.shared.show(on: self)
-              }
-          }
-          EOF
 
       - name: Configure Pods
         script: |
@@ -66,64 +71,11 @@ workflows:
           end
           EOF
           cd ios/App && pod install --repo-update
-          
-      - name: Create Info.plist
-        script: |
-          cat <<'EOF' > ios/App/App/Info.plist
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>CFBundleDevelopmentRegion</key>
-            <string>en</string>
-            <key>CFBundleDisplayName</key>
-            <string>RemoteCam</string>
-            <key>CFBundleExecutable</key>
-            <string>$(EXECUTABLE_NAME)</string>
-            <key>CFBundleIdentifier</key>
-            <string>com.remotecam.app</string>
-            <key>CFBundleInfoDictionaryVersion</key>
-            <string>6.0</string>
-            <key>CFBundleName</key>
-            <string>$(PRODUCT_NAME)</string>
-            <key>CFBundlePackageType</key>
-            <string>APPL</string>
-            <key>CFBundleShortVersionString</key>
-            <string>1.0</string>
-            <key>CFBundleVersion</key>
-            <string>1</string>
-            <key>LSRequiresIPhoneOS</key>
-            <true/>
-            <key>NSCameraUsageDescription</key>
-            <string>Cette application utilise la caméra pour diffuser le flux vidéo.</string>
-            <key>NSBluetoothAlwaysUsageDescription</key>
-            <string>Nécessaire pour communiquer avec la montre Garmin.</string>
-            <key>NSBluetoothPeripheralUsageDescription</key>
-            <string>Nécessaire pour communiquer avec la montre Garmin.</string>
-            <key>UILaunchStoryboardName</key>
-            <string>LaunchScreen</string>
-            <key>UIMainStoryboardFile</key>
-            <string>Main</string>
-            <key>UIRequiredDeviceCapabilities</key>
-            <array>
-              <string>armv7</string>
-            </array>
-            <key>UISupportedInterfaceOrientations</key>
-            <array>
-              <string>UIInterfaceOrientationPortrait</string>
-            </array>
-            <key>UIViewControllerBasedStatusBarAppearance</key>
-            <true/>
-          </dict>
-          </plist>
-          EOF
 
-      - name: Build iOS App (Direct Output)
+      - name: Build iOS App (Force Plist)
         script: |
           cd ios/App
           mkdir -p build_output
-          
-          # On compile en forçant les réglages de compatibilité sur TOUS les modules (Pods inclus)
           xcodebuild build \
             -workspace App.xcworkspace \
             -scheme App \
@@ -135,19 +87,16 @@ workflows:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            SWIFT_COMPILATION_MODE=wholemodule \
-            SWIFT_VERSION=5.0 \
-            IPHONEOS_DEPLOYMENT_TARGET=14.0 \
+            INFOPLIST_FILE="App/Info.plist" \
+            GENERATE_INFOPLIST_FILE=NO \
             FRAMEWORK_SEARCH_PATHS="$(inherited) '$(PROJECT_DIR)/Frameworks'" \
-            OTHER_LDFLAGS="$(inherited) -framework ConnectIQ" \
-            | xcbeautify || true
+            OTHER_LDFLAGS="$(inherited) -framework ConnectIQ"
 
       - name: Package IPA
         script: |
           rm -rf Payload RemoteCam.ipa
           mkdir -p Payload
           APP_PATH=$(find ios/App/build_output -name "*.app" -type d | head -n 1)
-          if [ -z "$APP_PATH" ]; then exit 1; fi
           cp -r "$APP_PATH" Payload/
           zip -r RemoteCam.ipa Payload
     artifacts:
