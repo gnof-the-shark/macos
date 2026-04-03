@@ -13,24 +13,46 @@ struct ContentView: View {
             
             VStack {
                 Spacer()
-                Text("En attente de la montre...")
-                    .foregroundColor(.white)
-                    .padding()
-                    .background(Color.black.opacity(0.5))
-                    .cornerRadius(10)
+                // Bouton déclencheur manuel (sans montre)
+                Button(action: {
+                    cameraManager.takePhoto()
+                }) {
+                    Circle()
+                        .strokeBorder(Color.white, lineWidth: 4)
+                        .background(Circle().fill(Color.white.opacity(0.3)))
+                        .frame(width: 70, height: 70)
+                }
+                .padding(.bottom, 20)
+                // Bouton connexion montre Garmin
+                Button("Connecter la montre") {
+                    cameraManager.selectGarminDevice()
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(Color.blue.opacity(0.8))
+                .foregroundColor(.white)
+                .cornerRadius(10)
+                .padding(.bottom, 30)
             }
         }
         .onAppear {
             cameraManager.checkPermissions()
             cameraManager.setupGarmin()
         }
+        .onOpenURL { url in
+            ConnectIQ.sharedInstance().parseDeviceSelectionResponse(from: url)
+            cameraManager.registerForKnownDeviceEvents()
+        }
     }
 }
 
 // Logique de la caméra et de la connexion Garmin
-class CameraManager: NSObject, ObservableObject, IQDeviceEventDelegate {
+class CameraManager: NSObject, ObservableObject, IQDeviceEventDelegate, IQAppMessageDelegate {
     let session = AVCaptureSession()
     private let photoOutput = AVCapturePhotoOutput()
+    
+    // UUID de l'app Connect IQ sur la montre (à remplacer par votre propre App ID)
+    private let garminAppID = UUID(uuidString: "5e59696a-c38b-4afe-b787-9433a22bfae2")!
     
     func checkPermissions() {
         // Code pour demander l'accès à la caméra
@@ -49,17 +71,42 @@ class CameraManager: NSObject, ObservableObject, IQDeviceEventDelegate {
         session.startRunning()
     }
     
-    func setupGarmin() {
-        // Initialisation du SDK ConnectIQ pour écouter "TAKE_PHOTO"
-        guard let ciq = ConnectIQ.sharedInstance() else { return }
-        ciq.showDeviceSelection()
+    func takePhoto() {
+        let settings = AVCapturePhotoSettings()
+        photoOutput.capturePhoto(with: settings, delegate: self)
     }
     
-    // Déclenché par la montre
+    func setupGarmin() {
+        // Enregistrement pour les événements des montres déjà couplées
+        registerForKnownDeviceEvents()
+    }
+    
+    func selectGarminDevice() {
+        // Ouvre le sélecteur de montre Garmin à la demande de l'utilisateur
+        ConnectIQ.sharedInstance().showDeviceSelection()
+    }
+    
+    func registerForKnownDeviceEvents() {
+        // Enregistrement pour recevoir les événements et messages de chaque montre connue
+        guard let devices = ConnectIQ.sharedInstance().getKnownDevices() as? [IQDevice] else { return }
+        for device in devices {
+            ConnectIQ.sharedInstance().register(forDeviceEvents: device, delegate: self)
+            let app = IQApp(id: garminAppID, uuid: garminAppID, device: device)
+            ConnectIQ.sharedInstance().register(forAppMessages: app, delegate: self)
+        }
+    }
+    
+    // Déclenché par la montre (IQDeviceEventDelegate – ancienne API)
     func deviceAppMessageReceived(_ message: Any, from device: IQDevice) {
         if let dict = message as? [String: Any], dict["command"] as? String == "TAKE_PHOTO" {
-            let settings = AVCapturePhotoSettings()
-            photoOutput.capturePhoto(with: settings, delegate: self)
+            takePhoto()
+        }
+    }
+    
+    // Déclenché par la montre (IQAppMessageDelegate)
+    func receivedMessage(_ message: Any, fromApp app: IQApp) {
+        if let dict = message as? [String: Any], dict["command"] as? String == "TAKE_PHOTO" {
+            takePhoto()
         }
     }
 }
