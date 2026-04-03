@@ -89,11 +89,26 @@ workflows:
                 config.build_settings['SWIFT_COMPILATION_MODE'] = 'singlefile'
                 config.build_settings['SWIFT_OPTIMIZATION_LEVEL'] = '-Onone'
 
-                # CORRECTIF : forcer CapacitorCordova à utiliser le bon Info.plist
-                # au lieu du chemin fantôme Pods/App/Info.plist
+                # CORRECTIF 1 : bon Info.plist pour CapacitorCordova
                 if target.name == 'CapacitorCordova'
                   config.build_settings['INFOPLIST_FILE'] = '$(SRCROOT)/App/Info.plist'
                 end
+
+                # CORRECTIF 2 : isoler ConnectIQ — ne pas le linker dans les pods
+                # On retire OTHER_LDFLAGS et FRAMEWORK_SEARCH_PATHS hérités du workspace
+                # pour tous les targets SAUF 'App' (qui est dans App.xcodeproj, pas Pods)
+                other_ldflags = config.build_settings['OTHER_LDFLAGS'] || '$(inherited)'
+                if other_ldflags.is_a?(Array)
+                  config.build_settings['OTHER_LDFLAGS'] = other_ldflags.reject { |f| f.include?('ConnectIQ') }
+                elsif other_ldflags.is_a?(String)
+                  config.build_settings['OTHER_LDFLAGS'] = other_ldflags.gsub('-framework ConnectIQ', '').strip
+                end
+
+                # Corriger le FRAMEWORK_SEARCH_PATHS : utiliser le bon chemin absolu
+                config.build_settings['FRAMEWORK_SEARCH_PATHS'] = [
+                  '$(inherited)',
+                  '$(SRCROOT)/../App/Frameworks'
+                ]
               end
             end
           end
@@ -125,8 +140,9 @@ workflows:
             ARCHS="arm64" \
             SWIFT_USE_INTEGRATED_DRIVER=NO \
             INFOPLIST_FILE="App/Info.plist" \
-            FRAMEWORK_SEARCH_PATHS="$(inherited) '$(PROJECT_DIR)/Frameworks'" \
-            OTHER_LDFLAGS="$(inherited) -framework ConnectIQ"
+            FRAMEWORK_SEARCH_PATHS="$(inherited) $(PROJECT_DIR)/Frameworks" \
+            OTHER_LDFLAGS="$(inherited) -framework ConnectIQ" \
+            ONLY_ACTIVE_ARCH=YES
 
       - name: Package IPA
         script: |
