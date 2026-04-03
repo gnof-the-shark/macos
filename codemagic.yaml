@@ -9,9 +9,11 @@ workflows:
       cocoapods: default
     scripts:
       - name: Install Dependencies
-        script: |
+        script: | 
           npm install
-          npx cap add ios
+          # On s'assure que les plateformes sont à jour
+          npx cap add ios || true
+          npx cap update ios
       
       - name: Download Garmin SDK
         script: |
@@ -59,12 +61,14 @@ workflows:
           }
           EOF
           echo "\n" >> ios/App/App/AppDelegate.swift
-          grep -v "import " CameraManager.swift >> ios/App/App/AppDelegate.swift
+          if [ -f CameraManager.swift ]; then
+            grep -v "import " CameraManager.swift >> ios/App/App/AppDelegate.swift
+          fi
 
       - name: Configure Pods
         script: |
           cat <<'EOF' > ios/App/Podfile
-          platform :ios, '13.0'
+          platform :ios, '14.0'
           target 'App' do
             use_frameworks!
             pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
@@ -76,6 +80,7 @@ workflows:
       - name: Build iOS App (Unsigned)
         script: |
           cd ios/App
+          # On désactive l'indexation des modules explicites qui fait souvent planter Xcode sur les serveurs CI
           xcodebuild build \
             -workspace App.xcworkspace \
             -scheme App \
@@ -85,13 +90,16 @@ workflows:
             ONLY_ACTIVE_ARCH=YES \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO \
             FRAMEWORK_SEARCH_PATHS="$(inherited) '$(PROJECT_DIR)/Frameworks'" \
             OTHER_LDFLAGS="$(inherited) -framework ConnectIQ"
 
       - name: Package IPA
         script: |
           mkdir -p Payload
-          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "App.app" -type d | head -n 1)
+          # Recherche plus robuste de l'app compilée
+          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "App.app" -type d -path "*/Release-iphoneos/*" | head -n 1)
+          if [ -z "$APP_PATH" ]; then echo "App not found"; exit 1; fi
           cp -r "$APP_PATH" Payload/
           zip -r RemoteCam.ipa Payload
     artifacts:
