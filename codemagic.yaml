@@ -78,22 +78,29 @@ workflows:
           EOF
           cd ios/App && pod install --repo-update
 
-      - name: Build iOS App (Final Fix)
+      - name: Build iOS App (Ultra-Stable)
         script: |
           cd ios/App
           mkdir -p build_output
+          
+          # 1. On nettoie le cache des modules Swift qui fait planter le Driver
+          rm -rf build_output/ModuleCache.noindex
+          
+          # 2. Compilation avec options de stabilité CI
           xcodebuild build \
             -workspace App.xcworkspace \
             -scheme App \
             -sdk iphoneos \
             -configuration Release \
             -derivedDataPath build_output \
+            -jobs 1 \
             ARCHS="arm64" \
             ONLY_ACTIVE_ARCH=YES \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            INFOPLIST_FILE="App/Info.plist" \
+            SWIFT_COMPILATION_MODE=wholemodule \
+            SWIFT_USE_INTEGRATED_DRIVER=NO \
             FRAMEWORK_SEARCH_PATHS="$(inherited) '$(PROJECT_DIR)/Frameworks'" \
             OTHER_LDFLAGS="$(inherited) -framework ConnectIQ"
 
