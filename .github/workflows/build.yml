@@ -3,47 +3,24 @@ name: "Build RemoteCam Final"
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:
 
 jobs:
   build:
     runs-on: macos-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
 
       - name: Install Dependencies
         run: |
           npm install
           npx cap add ios
-
-      - name: Preparation des Ressources
-        run: |
-          mkdir -p resources www
-          # Copie de l'icône si elle existe à la racine
-          if [ -f icon.png ]; then cp icon.png resources/icon.png; fi
-          # Création d'un index.html de secours si absent
-          if [ ! -f index.html ]; then
-            echo "<!DOCTYPE html><html><body style='background:transparent;'></body></html>" > www/index.html
-          else
-            cp index.html www/index.html
-          fi
-          npx @capacitor/assets generate --ios
-
-      - name: Sync Capacitor
-        run: |
-          npx cap copy ios
           npx cap sync ios
 
-      - name: Fusion du Code Swift (AppDelegate + CameraManager)
+      - name: Inject Camera & Garmin SDK
         run: |
-          # Création du fichier AppDelegate avec le support natif de la caméra
+          # 1. On fusionne ton code CameraManager dans l'AppDelegate
           cat <<'EOF' > ios/App/App/AppDelegate.swift
           import UIKit
           import Capacitor
@@ -54,12 +31,10 @@ jobs:
           class AppDelegate: UIResponder, UIApplicationDelegate {
               var window: UIWindow?
               lazy var cameraManager = CameraManager()
-              
               func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
                   cameraManager.setup()
                   let previewLayer = AVCaptureVideoPreviewLayer(session: cameraManager.session)
                   previewLayer.videoGravity = .resizeAspectFill
-                  
                   DispatchQueue.main.async {
                       if let rootVC = self.window?.rootViewController {
                           previewLayer.frame = rootVC.view.bounds
@@ -67,17 +42,12 @@ jobs:
                           rootVC.view.backgroundColor = .clear
                           for subview in rootVC.view.subviews {
                               subview.backgroundColor = .clear
-                              if let webView = subview as? UIView {
-                                  webView.isOpaque = false
-                                  webView.backgroundColor = .clear
-                              }
                           }
                       }
                   }
                   return true
               }
           }
-
           extension UIImage {
               func resized(to size: CGSize) -> UIImage? {
                   UIGraphicsBeginImageContextWithOptions(size, false, 0.0)
@@ -88,70 +58,35 @@ jobs:
               }
           }
           EOF
-          
-          # On ajoute ton fichier CameraManager.swift à la suite en ignorant ses imports
-          if [ -f CameraManager.swift ]; then
-            grep -v "import " CameraManager.swift >> ios/App/App/AppDelegate.swift
-          else
-            echo "ERREUR: CameraManager.swift introuvable à la racine"
-            exit 1
-          fi
+          grep -v "import " CameraManager.swift >> ios/App/App/AppDelegate.swift
 
-- name: Install Pods (Garmin SDK)
+      - name: Install Pods (Garmin)
         run: |
           cd ios/App
           pod install --repo-update
 
-      - name: Compilation Xcode (Unsigned)
+      - name: Build App Binary
         run: |
           cd ios/App
-          # On ajoute explicitement le chemin des Pods pour que ConnectIQ soit trouvé
+          # On compile le binaire sans tenter d'exporter (pour éviter l'erreur de signature)
           xcodebuild build \
             -workspace App.xcworkspace \
             -scheme App \
             -sdk iphoneos \
             -configuration Release \
             CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            ENTITLEMENTS_REQUIRED=NO \
-            FRAMEWORK_SEARCH_PATHS="$(inherited) $(PROJECT_DIR)/Pods/**"
+            CODE_SIGNING_REQUIRED=NO
 
-      - name: Creation de l'IPA
+      - name: Create Unsigned IPA (Sideloadly compatible)
         run: |
           mkdir -p Payload
-          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "App.app" -type d | head -n 1)
-          if [ -z "$APP_PATH" ]; then echo "Erreur: App.app introuvable"; exit 1; fi
-          cp -r "$APP_PATH" Payload/
-          zip -r RemoteCam_Final.ipa Payload
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: RemoteCam-iOS-IPA
-          path: RemoteCam_Final.ipa
-
-      - name: Compilation Xcode (Unsigned)
-        run: |
-          cd ios/App
-          xcodebuild build \
-            -workspace App.xcworkspace \
-            -scheme App \
-            -sdk iphoneos \
-            -configuration Release \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            ENTITLEMENTS_REQUIRED=NO
-
-      - name: Creation de l'IPA
-        run: |
-          mkdir -p Payload
-          # Recherche dynamique du dossier de compilation
+          # On cherche le fichier .app généré
           APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "App.app" -type d | head -n 1)
           cp -r "$APP_PATH" Payload/
-          zip -r RemoteCam_Final.ipa Payload
+          zip -r RemoteCam_Ready.ipa Payload
 
-      - name: Upload Artifact
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: RemoteCam-iOS-IPA
-          path: RemoteCam_Final.ipa
+          name: RemoteCam-iOS
+          path: RemoteCam_Ready.ipa
