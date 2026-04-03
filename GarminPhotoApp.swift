@@ -13,7 +13,7 @@ struct GarminPhotoApp: App {
         WindowGroup {
             ContentView()
                 .onOpenURL { url in
-                    ConnectIQ.sharedInstance().parseDeviceSelectionResponseFromURL(url)
+                    ConnectIQ.sharedInstance().parseDeviceSelectionResponse(from: url)
                 }
         }
     }
