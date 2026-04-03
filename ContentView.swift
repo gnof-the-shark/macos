@@ -13,11 +13,20 @@ struct ContentView: View {
             
             VStack {
                 Spacer()
-                Text("En attente de la montre...")
-                    .foregroundColor(.white)
+                HStack {
+                    Text("En attente de la montre...")
+                        .foregroundColor(.white)
+                        .padding()
+                        .background(Color.black.opacity(0.5))
+                        .cornerRadius(10)
+                    Button("Connecter la montre") {
+                        cameraManager.selectGarminDevice()
+                    }
                     .padding()
-                    .background(Color.black.opacity(0.5))
+                    .background(Color.blue.opacity(0.8))
+                    .foregroundColor(.white)
                     .cornerRadius(10)
+                }
             }
         }
         .onAppear {
@@ -50,9 +59,13 @@ class CameraManager: NSObject, ObservableObject, IQDeviceEventDelegate {
     }
     
     func setupGarmin() {
-        // Initialisation du SDK ConnectIQ pour écouter "TAKE_PHOTO"
-        guard let ciq = ConnectIQ.sharedInstance() else { return }
-        ciq.showDeviceSelection()
+        // Enregistrement du délégué pour recevoir les messages de la montre
+        ConnectIQ.sharedInstance().register(forDeviceEvents: self, deviceEventDelegate: self)
+    }
+    
+    func selectGarminDevice() {
+        // Ouvre le sélecteur de montre Garmin à la demande de l'utilisateur
+        ConnectIQ.sharedInstance().showDeviceSelection()
     }
     
     // Déclenché par la montre
