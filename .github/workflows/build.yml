@@ -1,138 +1,33 @@
-name: Build Sport App IPA
+name: Build Garmin Photo IPA
 on: [push]
 
 jobs:
   build:
     runs-on: macos-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
+      - name: Install xcodegen
+        run: brew install xcodegen
 
-      - name: Create Package File
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Resolve Package Dependencies
         run: |
-          # Si tu n'as pas de package.json, on le crée pour éviter l'erreur de Capacitor
-          echo '{"name": "sport-tracker", "version": "1.0.0", "dependencies": {"@capacitor/core": "^5.0.0", "@capacitor/ios": "^5.0.0"}, "devDependencies": {"@capacitor/cli": "^5.0.0"}}' > package.json
-
-      - name: Install Dependencies
-        run: |
-          npm install
-
-      - name: Build Web Folder
-        run: |
-          # On crée un dossier propre pour les fichiers web
-          mkdir -p www
-          cp index.html www/ 2>/dev/null || true
-          cp styles.css www/ 2>/dev/null || true
-          cp app.js www/ 2>/dev/null || true
-          cp admin.js www/ 2>/dev/null || true
-          cp firebase-config.js www/ 2>/dev/null || true
-          
-          # Si index.html n'est pas là, on regarde s'il est dans un sous-dossier par erreur
-          if [ ! -f "www/index.html" ]; then
-            find . -name "index.html" -exec cp {} www/ \;
-            find . -name "styles.css" -exec cp {} www/ \;
-            find . -name "app.js" -exec cp {} www/ \;
-            find . -name "admin.js" -exec cp {} www/ \;
-            find . -name "firebase-config.js" -exec cp {} www/ \;
-          fi
-
-      - name: Capacitor Setup
-        run: |
-          # On supprime tout ancien dossier ios pour éviter les erreurs de liens Windows/Mac
-          rm -rf ios
-          npx cap add ios
-          npx cap sync ios
-
-      - name: Copy GoogleService-Info.plist
-        run: |
-          cp GoogleService-Info.plist ios/App/App/
-
-      - name: Add Firebase via Swift Package Manager
-        run: |
-          gem install xcodeproj --no-document 2>/dev/null || true
-          ruby << 'RUBYEOF'
-          require 'xcodeproj'
-
-          project_path = 'ios/App/App.xcodeproj'
-          project = Xcodeproj::Project.open(project_path)
-
-          # Add Firebase remote package reference
-          package = project.new(Xcodeproj::Project::Object::XCRemoteSwiftPackageReference)
-          package.repositoryURL = 'https://github.com/firebase/firebase-ios-sdk'
-          package.requirement = { 'kind' => 'upToNextMajorVersion', 'minimumVersion' => '11.0.0' }
-          project.root_object.package_references << package
-
-          # Add FirebaseAnalytics to App target
-          target = project.targets.find { |t| t.name == 'App' }
-          if target
-            product = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
-            product.package = package
-            product.product_name = 'FirebaseAnalytics'
-            target.package_product_dependencies << product
-
-            build_file = project.new(Xcodeproj::Project::Object::PBXBuildFile)
-            build_file.product_ref = product
-            target.frameworks_build_phase.files << build_file
-          end
-
-          project.save
-          puts "Firebase SPM dependency added successfully"
-          RUBYEOF
-
-      - name: Setup AppDelegate with Firebase
-        run: |
-          cat > ios/App/App/AppDelegate.swift << 'SWIFT'
-          import UIKit
-          import Capacitor
-          import FirebaseCore
-
-          @UIApplicationMain
-          class AppDelegate: UIResponder, UIApplicationDelegate {
-
-            var window: UIWindow?
-
-            func application(_ application: UIApplication,
-              didFinishLaunchingWithOptions launchOptions:
-                [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-              FirebaseApp.configure()
-              return true
-            }
-
-            func application(_ app: UIApplication, open url: URL,
-              options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
-              return ApplicationDelegateProxy.shared.application(app, open: url, options: options)
-            }
-
-            func application(_ application: UIApplication, continue userActivity: NSUserActivity,
-              restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
-              return ApplicationDelegateProxy.shared.application(
-                application, continue: userActivity, restorationHandler: restorationHandler)
-            }
-          }
-          SWIFT
-
-      - name: Resolve Firebase Package Dependencies
-        run: |
-          cd ios/App
           xcodebuild -resolvePackageDependencies \
-            -workspace App.xcworkspace \
+            -project GarminPhoto.xcodeproj \
             -scheme App
 
       - name: Build IPA
         run: |
           xcodebuild archive \
-            -workspace ios/App/App.xcworkspace \
+            -project GarminPhoto.xcodeproj \
             -scheme App \
             -configuration Debug \
-            -archivePath SportApp.xcarchive \
+            -archivePath GarminPhoto.xcarchive \
             -sdk iphoneos \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
@@ -141,11 +36,12 @@ jobs:
       - name: Package
         run: |
           mkdir -p Payload
-          cp -r SportApp.xcarchive/Products/Applications/App.app Payload/
-          zip -r SportTracker.ipa Payload/
+          cp -r GarminPhoto.xcarchive/Products/Applications/App.app Payload/
+          zip -r GarminPhoto.ipa Payload/
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Sport-App-IPA
-          path: SportTracker.ipa
+          name: Garmin-Photo-IPA
+          path: GarminPhoto.ipa
+
