@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Garmin Photo</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; width: 100vw; height: 100vh; overflow: hidden; }
+    #preview { width: 100%; height: 100%; object-fit: cover; display: block; }
+    #status {
+      position: fixed;
+      bottom: calc(40px + env(safe-area-inset-bottom));
+      left: 50%;
+      transform: translateX(-50%);
+      color: #fff;
+      background: rgba(0, 0, 0, 0.55);
+      padding: 8px 18px;
+      border-radius: 10px;
+      font-family: -apple-system, sans-serif;
+      font-size: 15px;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <video id="preview" autoplay playsinline muted></video>
+  <div id="status">En attente de la montre…</div>
+
+  <script>
+    const video = document.getElementById('preview');
+    const status = document.getElementById('status');
+
+    navigator.mediaDevices
+      .getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+      .then(stream => { video.srcObject = stream; })
+      .catch(err => { status.textContent = 'Caméra indisponible : ' + err.message; });
+
+    function takePhoto() {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 1280;
+      canvas.height = video.videoHeight || 720;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+      canvas.toBlob(blob => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'garmin_photo_' + Date.now() + '.jpg';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+        status.textContent = 'Photo prise !';
+        setTimeout(() => { status.textContent = 'En attente de la montre…'; }, 2000);
+      }, 'image/jpeg', 0.92);
+    }
+
+    // Triggered by native Garmin plugin or external event
+    window.addEventListener('garmin-take-photo', takePhoto);
+  </script>
+</body>
+</html>

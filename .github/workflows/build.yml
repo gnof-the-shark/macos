@@ -9,26 +9,21 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install xcodegen
-        run: brew install xcodegen
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
-      - name: Generate Xcode project
-        run: xcodegen generate
+      - name: Install npm dependencies
+        run: npm install
 
-      - name: Configure Git credentials for Swift Package Manager
-        run: |
-          git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
-
-      - name: Resolve Package Dependencies
-        run: |
-          xcodebuild -resolvePackageDependencies \
-            -project GarminPhoto.xcodeproj \
-            -scheme App
+      - name: Add iOS platform via Capacitor
+        run: npx cap add ios
 
       - name: Build IPA
         run: |
           xcodebuild archive \
-            -project GarminPhoto.xcodeproj \
+            -project ios/App/App.xcodeproj \
             -scheme App \
             -configuration Debug \
             -archivePath GarminPhoto.xcarchive \
