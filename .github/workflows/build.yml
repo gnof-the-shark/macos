@@ -26,7 +26,6 @@ jobs:
 
       - name: Injection du Code Swift Natif (AppDelegate)
         run: |
-          # On crée un AppDelegate qui contient TOUT : le démarrage, la caméra et Garmin
           cat <<'EOF' > ios/App/App/AppDelegate.swift
           import UIKit
           import Capacitor
@@ -39,10 +38,7 @@ jobs:
               lazy var cameraManager = CameraManager()
               
               func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-                  // Lancement de la logique caméra/Garmin
                   cameraManager.setup()
-                  
-                  // Création de la vue caméra native
                   let previewLayer = AVCaptureVideoPreviewLayer(session: cameraManager.session)
                   previewLayer.videoGravity = .resizeAspectFill
                   
@@ -51,7 +47,6 @@ jobs:
                           previewLayer.frame = rootVC.view.bounds
                           rootVC.view.layer.insertSublayer(previewLayer, at: 0)
                           rootVC.view.backgroundColor = .clear
-                          // On rend le WebView transparent pour voir la caméra derrière
                           for subview in rootVC.view.subviews {
                               subview.backgroundColor = .clear
                               (subview as? UIView)?.isOpaque = false
@@ -62,7 +57,6 @@ jobs:
               }
           }
 
-          // Extension pour le redimensionnement d'image Garmin
           extension UIImage {
               func resized(to size: CGSize) -> UIImage? {
                   UIGraphicsBeginImageContextWithOptions(size, false, 0.0)
@@ -74,24 +68,27 @@ jobs:
           }
           EOF
 
-          # On ajoute ton CameraManager.swift à la fin du fichier en filtrant les imports
-          echo "\n// --- CameraManager Logic ---" >> ios/App/App/AppDelegate.swift
-          grep -v "import " CameraManager.swift >> ios/App/App/AppDelegate.swift
+          echo -e "\n// --- CameraManager Logic ---" >> ios/App/App/AppDelegate.swift
+          if [ -f CameraManager.swift ]; then
+            grep -v "import " CameraManager.swift >> ios/App/App/AppDelegate.swift
+          else
+            echo "Error: CameraManager.swift not found"
+            exit 1
+          fi
 
-- name: Configuration du SDK Garmin (Podfile)
+      - name: Configuration du SDK Garmin (Podfile)
         run: |
-          cat <<EOF > ios/App/Podfile
+          cat <<'EOF' > ios/App/Podfile
           platform :ios, '13.0'
           target 'App' do
             use_frameworks!
-            # On remonte de deux niveaux pour trouver les node_modules de la racine
             pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
             pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
             pod 'ConnectIQ', :git => 'https://github.com/garmin/connectiq-companion-app-sdk-ios.git'
           end
           EOF
           cd ios/App && pod install --repo-update
-          
+
       - name: Compilation Xcode (IPA non signé)
         run: |
           cd ios/App
@@ -107,6 +104,7 @@ jobs:
         run: |
           mkdir -p Payload
           APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "App.app" -type d | head -n 1)
+          if [ -z "$APP_PATH" ]; then exit 1; fi
           cp -r "$APP_PATH" Payload/
           zip -r RemoteCam_Final.ipa Payload
 
