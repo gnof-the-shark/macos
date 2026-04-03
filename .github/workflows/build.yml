@@ -78,19 +78,20 @@ jobs:
           echo "\n// --- CameraManager Logic ---" >> ios/App/App/AppDelegate.swift
           grep -v "import " CameraManager.swift >> ios/App/App/AppDelegate.swift
 
-      - name: Configuration du SDK Garmin (Podfile)
+- name: Configuration du SDK Garmin (Podfile)
         run: |
           cat <<EOF > ios/App/Podfile
           platform :ios, '13.0'
           target 'App' do
             use_frameworks!
-            pod 'Capacitor', :path => 'node_modules/@capacitor/ios'
-            pod 'CapacitorCordova', :path => 'node_modules/@capacitor/ios'
+            # On remonte de deux niveaux pour trouver les node_modules de la racine
+            pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
+            pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
             pod 'ConnectIQ', :git => 'https://github.com/garmin/connectiq-companion-app-sdk-ios.git'
           end
           EOF
           cd ios/App && pod install --repo-update
-
+          
       - name: Compilation Xcode (IPA non signé)
         run: |
           cd ios/App
