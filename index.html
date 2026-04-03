@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Garmin Photo App</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100dvh;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      overflow: hidden;
+    }
+
+    #camera-container {
+      position: relative;
+      width: 100%;
+      height: 100dvh;
+    }
+
+    #video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    /* Hidden canvas used to capture frames */
+    #canvas { display: none; }
+
+    #overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      padding-bottom: 40px;
+      gap: 16px;
+    }
+
+    #status {
+      color: #fff;
+      background: rgba(0, 0, 0, 0.55);
+      padding: 8px 18px;
+      border-radius: 10px;
+      font-size: 16px;
+    }
+
+    #shutter-btn {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      border: 4px solid #fff;
+      background: rgba(255, 255, 255, 0.25);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.1s, background 0.1s;
+    }
+
+    #shutter-btn:active {
+      transform: scale(0.92);
+      background: rgba(255, 255, 255, 0.6);
+    }
+
+    #shutter-btn svg {
+      width: 32px;
+      height: 32px;
+      fill: #fff;
+    }
+
+    #error-msg {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 12px;
+      color: #fff;
+      background: #111;
+      text-align: center;
+      padding: 24px;
+      font-size: 15px;
+      display: none;
+    }
+
+    #error-msg button {
+      margin-top: 8px;
+      padding: 10px 24px;
+      border-radius: 8px;
+      border: none;
+      background: #0a84ff;
+      color: #fff;
+      font-size: 15px;
+      cursor: pointer;
+    }
+
+    /* Photo preview modal */
+    #preview-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.82);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      z-index: 100;
+      padding: 24px;
+    }
+
+    #preview-modal.visible { display: flex; }
+
+    #preview-img {
+      max-width: 100%;
+      max-height: 65dvh;
+      border-radius: 12px;
+      box-shadow: 0 4px 32px rgba(0,0,0,0.6);
+    }
+
+    .modal-btns {
+      display: flex;
+      gap: 12px;
+    }
+
+    .modal-btns a, .modal-btns button {
+      padding: 12px 28px;
+      border-radius: 10px;
+      border: none;
+      font-size: 16px;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    #save-btn {
+      background: #0a84ff;
+      color: #fff;
+    }
+
+    #close-btn {
+      background: rgba(255,255,255,0.18);
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div id="camera-container">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
+
+    <div id="overlay">
+      <span id="status">En attente de la montre…</span>
+      <button id="shutter-btn" title="Prendre une photo">
+        <!-- camera icon -->
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7zm7-12H9.83L8.5 2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2z"/>
+        </svg>
+      </button>
+    </div>
+
+    <div id="error-msg">
+      <p id="error-text">Impossible d'accéder à la caméra.</p>
+      <button onclick="startCamera()">Réessayer</button>
+    </div>
+  </div>
+
+  <!-- Photo preview modal -->
+  <div id="preview-modal">
+    <img id="preview-img" alt="Photo capturée" />
+    <div class="modal-btns">
+      <a id="save-btn" download="">Enregistrer</a>
+      <button id="close-btn" onclick="closePreview()">Fermer</button>
+    </div>
+  </div>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const statusEl = document.getElementById('status');
+    const shutterBtn = document.getElementById('shutter-btn');
+    const errorMsg = document.getElementById('error-msg');
+    const errorText = document.getElementById('error-text');
+    const previewModal = document.getElementById('preview-modal');
+    const previewImg = document.getElementById('preview-img');
+    const saveBtn = document.getElementById('save-btn');
+
+    let currentObjectUrl = null;
+
+    async function startCamera() {
+      errorMsg.style.display = 'none';
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' },
+          audio: false
+        });
+        video.srcObject = stream;
+        statusEl.textContent = 'En attente de la montre…';
+      } catch (err) {
+        errorText.textContent = 'Impossible d\'accéder à la caméra : ' + err.message;
+        errorMsg.style.display = 'flex';
+      }
+    }
+
+    function takePhoto() {
+      if (!video.srcObject) return;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+
+      canvas.toBlob(blob => {
+        // Release any previous object URL
+        if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
+        currentObjectUrl = URL.createObjectURL(blob);
+
+        const filename = 'photo_' + Date.now() + '.jpg';
+        previewImg.src = currentObjectUrl;
+        saveBtn.href = currentObjectUrl;
+        saveBtn.download = filename;
+
+        previewModal.classList.add('visible');
+        statusEl.textContent = 'Photo prise !';
+      }, 'image/jpeg', 0.95);
+    }
+
+    function closePreview() {
+      previewModal.classList.remove('visible');
+      statusEl.textContent = 'En attente de la montre…';
+    }
+
+    shutterBtn.addEventListener('click', takePhoto);
+
+    // Simulate receiving a "TAKE_PHOTO" command via a custom event so other
+    // pages / browser extensions can trigger it the same way the Garmin watch
+    // would (window.dispatchEvent(new CustomEvent('garmin-take-photo'))).
+    window.addEventListener('garmin-take-photo', takePhoto);
+
+    startCamera();
+  </script>
+</body>
+</html>
