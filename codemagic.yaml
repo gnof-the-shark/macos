@@ -75,18 +75,28 @@ workflows:
           EOF
           cd ios/App && pod install --repo-update
 
-      - name: Build iOS App (Unsigned)
+- name: Build iOS App (Unsigned)
         script: |
           cd ios/App
+          # On nettoie avant de compiler pour éviter les résidus
+          xcodebuild clean 
+          
+          # On compile en ignorant les erreurs de signature et en ciblant uniquement l'iPhone (arm64)
           xcodebuild build \
             -workspace App.xcworkspace \
             -scheme App \
             -sdk iphoneos \
             -configuration Release \
+            ARCHS="arm64" \
+            ONLY_ACTIVE_ARCH=YES \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            FRAMEWORK_SEARCH_PATHS="$(inherited) $(PROJECT_DIR)/Frameworks" \
-            OTHER_LDFLAGS="$(inherited) -framework ConnectIQ"
+            CODE_SIGN_ENTITLEMENTS="" \
+            CODE_SIGNING_IDENTITY="" \
+            FRAMEWORK_SEARCH_PATHS="$(inherited) '$(PROJECT_DIR)/Frameworks'" \
+            OTHER_LDFLAGS="$(inherited) -framework ConnectIQ" \
+            SWIFT_VERSION=5.0 \
+            -allowProvisioningUpdates
 
       - name: Package IPA
         script: |
