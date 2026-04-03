@@ -67,10 +67,12 @@ workflows:
           EOF
           cd ios/App && pod install --repo-update
 
-      - name: Build iOS App (Direct Output)
+- name: Build iOS App (Direct Output)
         script: |
           cd ios/App
           mkdir -p build_output
+          
+          # On compile en forçant les réglages de compatibilité sur TOUS les modules (Pods inclus)
           xcodebuild build \
             -workspace App.xcworkspace \
             -scheme App \
@@ -83,8 +85,11 @@ workflows:
             CODE_SIGNING_REQUIRED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
             SWIFT_COMPILATION_MODE=wholemodule \
+            SWIFT_VERSION=5.0 \
+            IPHONEOS_DEPLOYMENT_TARGET=14.0 \
             FRAMEWORK_SEARCH_PATHS="$(inherited) '$(PROJECT_DIR)/Frameworks'" \
-            OTHER_LDFLAGS="$(inherited) -framework ConnectIQ"
+            OTHER_LDFLAGS="$(inherited) -framework ConnectIQ" \
+            | xcbeautify || true
 
       - name: Package IPA
         script: |
