@@ -35,12 +35,9 @@ jobs:
           npx cap copy ios
           npx cap sync ios
 
-      - name: Injection du Code et Correction Xcode
+      - name: Fusion du Code Swift
         run: |
-          # 1. On copie tes fichiers
-          cp CameraManager.swift ios/App/App/
-          
-          # 2. Création du AppDelegate corrigé (avec import AVFoundation explicite)
+          # 1. On prépare le début du fichier AppDelegate
           cat <<EOF > ios/App/App/AppDelegate.swift
           import UIKit
           import Capacitor
@@ -54,14 +51,13 @@ jobs:
               func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
                   cameraManager.setup()
                   let previewLayer = AVCaptureVideoPreviewLayer(session: cameraManager.session)
-                  previewLayer.videoGravity = AVLayerVideoGravity.resizeAspectFill
+                  previewLayer.videoGravity = .resizeAspectFill
                   
                   DispatchQueue.main.async {
                       if let rootVC = self.window?.rootViewController {
                           previewLayer.frame = rootVC.view.bounds
                           rootVC.view.layer.insertSublayer(previewLayer, at: 0)
                           rootVC.view.backgroundColor = .clear
-                          
                           for subview in rootVC.view.subviews {
                               subview.backgroundColor = .clear
                               if let webView = subview as? UIView {
@@ -74,25 +70,28 @@ jobs:
                   return true
               }
           }
+
+          // --- FUSION DU CODE CAMERAMANAGER ---
           EOF
+
+          # 2. On ajoute le contenu de ton CameraManager.swift à la suite (en retirant les imports doublons)
+          grep -v "import " CameraManager.swift >> ios/App/App/AppDelegate.swift
 
       - name: Install Pods
         run: |
           cd ios/App
           pod install
 
-      - name: Compilation (IPA non signé)
+      - name: Compilation
         run: |
           cd ios/App
-          # On force Xcode à compiler TOUS les fichiers Swift du dossier
           xcodebuild build \
             -workspace App.xcworkspace \
             -scheme App \
             -sdk iphoneos \
             -configuration Release \
             CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            OTHER_SWIFT_FLAGS="\$(inherited) -DCOCOAPODS"
+            CODE_SIGNING_REQUIRED=NO
 
       - name: Preparation du fichier IPA
         run: |
