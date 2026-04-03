@@ -61,7 +61,7 @@ scripts:
           }
           EOF
 
-     - name: Build iOS App (Direct Output)
+       - name: Build iOS App (Direct Output)
         script: |
           cd ios/App
           # On crée un dossier de sortie local
