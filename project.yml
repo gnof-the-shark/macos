@@ -1,0 +1,36 @@
+name: SportTracker
+options:
+  bundleIdPrefix: com.gnoftheshark
+  deploymentTarget:
+    iOS: "15.0"
+
+packages:
+  ConnectIQ:
+    url: https://github.com/garmin/connectiq-apple-sdk
+    from: 1.0.0
+
+targets:
+  App:
+    type: application
+    platform: iOS
+    sources:
+      - path: .
+        excludes:
+          - "project.yml"
+          - ".github/**"
+          - ".git/**"
+    info:
+      path: Info.plist
+      properties:
+        UILaunchStoryboardName: ""
+        NSCameraUsageDescription: "Nécessaire pour prendre des photos déclenchées par la montre Garmin"
+        CFBundleURLTypes:
+          - CFBundleTypeRole: Editor
+            CFBundleURLSchemes:
+              - sporttracker
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.gnoftheshark.sporttracker
+        SWIFT_VERSION: "5.0"
+    dependencies:
+      - package: ConnectIQ
