@@ -4,14 +4,13 @@ workflows:
     max_build_duration: 30
     instance_type: mac_mini_m1
     environment:
-      node: 18 # On fixe une version stable de Node
-      xcode: 15.2 # On fixe une version de Xcode stable
+      node: 18
+      xcode: latest
       cocoapods: default
     scripts:
       - name: Install Dependencies & Clean
         script: | 
           npm install
-          # On s'assure que le dossier iOS est propre
           rm -rf ios/App/Pods
           rm -rf ios/App/App.xcworkspace
           npx cap add ios
@@ -23,9 +22,12 @@ workflows:
           mkdir -p ios/App/Frameworks
           cp -r garmin-sdk/ConnectIQ.xcframework ios/App/Frameworks/
 
-      - name: Create Info.plist & Assets
+      - name: Setup iOS Files (Plist & Camera)
         script: |
+          # 1. Création du dossier de l'app
           mkdir -p ios/App/App
+          
+          # 2. Génération du Info.plist indispensable
           cat <<'EOF' > ios/App/App/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -36,24 +38,48 @@ workflows:
             <key>CFBundleVersion</key><string>1</string>
             <key>CFBundlePackageType</key><string>APPL</string>
             <key>CFBundleExecutable</key><string>App</string>
-            <key>NSCameraUsageDescription</key><string>Accès caméra.</string>
-            <key>NSBluetoothAlwaysUsageDescription</key><string>Lien Garmin.</string>
+            <key>NSCameraUsageDescription</key><string>Accès caméra requis pour le flux vidéo.</string>
+            <key>NSBluetoothAlwaysUsageDescription</key><string>Lien Garmin requis pour la montre.</string>
           </dict></plist>
           EOF
+
+          # 3. Copie du CameraManager.swift (SANS modification pour éviter les erreurs de syntaxe)
           if [ -f CameraManager.swift ]; then
             cp CameraManager.swift ios/App/App/CameraManager.swift
           fi
 
-      - name: Configure Pods (Direct Network Mode)
+          # 4. Injection de la logique de démarrage via extension
+          cat <<'EOF' > ios/App/App/Injection.swift
+          import UIKit
+          import Capacitor
+          import AVFoundation
+
+          extension CAPBridgeViewController {
+              override open func viewDidAppear(_ animated: Bool) {
+                  super.viewDidAppear(animated)
+                  
+                  // On initialise la caméra par-dessus la vue Capacitor
+                  let camera = CameraManager()
+                  camera.setup()
+                  
+                  let previewLayer = AVCaptureVideoPreviewLayer(session: camera.session)
+                  previewLayer.videoGravity = .resizeAspectFill
+                  previewLayer.frame = self.view.bounds
+                  self.view.layer.insertSublayer(previewLayer, at: 0)
+                  self.view.backgroundColor = .clear
+              }
+          }
+          EOF
+
+      - name: Configure Pods (Anti-Crash)
         script: |
           cat <<'EOF' > ios/App/Podfile
           platform :ios, '14.0'
           use_frameworks!
 
           target 'App' do
-            # On demande les versions officielles au lieu des fichiers locaux
-            pod 'Capacitor'
-            pod 'CapacitorCordova'
+            pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
+            pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
           end
 
           post_install do |installer|
@@ -61,42 +87,44 @@ workflows:
               target.build_configurations.each do |config|
                 config.build_settings['SWIFT_VERSION'] = '5.0'
                 config.build_settings['ENABLE_BITCODE'] = 'NO'
-                config.build_settings['SKIP_INSTALL'] = 'NO'
-                # On désactive l'optimisation pour éviter le Signal 6
-                config.build_settings['SWIFT_OPTIMIZATION_LEVEL'] = '-Onone'
+                # On force la compilation fichier par fichier pour éviter le Signal 6 (crash compilateur)
                 config.build_settings['SWIFT_COMPILATION_MODE'] = 'singlefile'
+                config.build_settings['SWIFT_OPTIMIZATION_LEVEL'] = '-Onone'
               end
             end
           end
           EOF
           cd ios/App && pod install --repo-update
 
-      - name: Build iOS App (Zero Indexing)
+      - name: Build iOS App (Final)
         script: |
           cd ios/App
           mkdir -p build_output
           
-          # On compile en ignorant totalement l'indexation (source de crash)
           xcodebuild build \
             -workspace App.xcworkspace \
             -scheme App \
             -sdk iphoneos \
             -configuration Release \
             -derivedDataPath build_output \
+            -jobs 1 \
             COMPILER_INDEX_STORE_ENABLE=NO \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
             ARCHS="arm64" \
             SWIFT_USE_INTEGRATED_DRIVER=NO \
-            OTHER_LDFLAGS="$(inherited) -framework ConnectIQ" \
-            | xcbeautify
+            INFOPLIST_FILE="App/Info.plist" \
+            FRAMEWORK_SEARCH_PATHS="$(inherited) '$(PROJECT_DIR)/Frameworks'" \
+            OTHER_LDFLAGS="$(inherited) -framework ConnectIQ"
 
       - name: Package IPA
         script: |
           mkdir -p Payload
+          # On récupère l'exécutable compilé
           APP_PATH=$(find ios/App/build_output -name "*.app" -type d | head -n 1)
           cp -r "$APP_PATH" Payload/
           zip -r RemoteCam.ipa Payload
+
     artifacts:
       - "*.ipa"
