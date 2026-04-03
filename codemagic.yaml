@@ -61,26 +61,18 @@ scripts:
           }
           EOF
 
-      - name: Configure Pods
-        script: |
-          cat <<'EOF' > ios/App/Podfile
-          platform :ios, '14.0'
-          target 'App' do
-            use_frameworks!
-            pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
-            pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
-          end
-          EOF
-          cd ios/App && pod install --repo-update
-
-      - name: Build iOS App (Unsigned)
+     - name: Build iOS App (Direct Output)
         script: |
           cd ios/App
+          # On crée un dossier de sortie local
+          mkdir -p build_output
+          
           xcodebuild build \
             -workspace App.xcworkspace \
             -scheme App \
             -sdk iphoneos \
             -configuration Release \
+            -derivedDataPath build_output \
             ARCHS="arm64" \
             ONLY_ACTIVE_ARCH=YES \
             CODE_SIGNING_ALLOWED=NO \
@@ -89,3 +81,23 @@ scripts:
             SWIFT_COMPILATION_MODE=wholemodule \
             FRAMEWORK_SEARCH_PATHS="$(inherited) '$(PROJECT_DIR)/Frameworks'" \
             OTHER_LDFLAGS="$(inherited) -framework ConnectIQ"
+
+      - name: Package IPA
+        script: |
+          # On nettoie les anciens essais
+          rm -rf Payload RemoteCam.ipa
+          mkdir -p Payload
+          
+          # On cherche l'app dans notre dossier build_output local
+          APP_PATH=$(find ios/App/build_output -name "*.app" -type d | head -n 1)
+          
+          if [ -z "$APP_PATH" ]; then
+            echo "ERREUR : Fichier .app introuvable dans build_output"
+            exit 1
+          fi
+          
+          echo "Application trouvée à : $APP_PATH"
+          cp -r "$APP_PATH" Payload/
+          zip -r RemoteCam.ipa Payload
+    artifacts:
+      - "*.ipa"
