@@ -5,17 +5,17 @@ workflows:
     instance_type: mac_mini_m1
     environment:
       node: 18
-      xcode: latest
+      xcode: 16.3
       cocoapods: default
     scripts:
       - name: Install Dependencies & Clean
-        script: | 
+        script: |
           npm install
           rm -rf ios/App/Pods
           rm -rf ios/App/App.xcworkspace
           npx cap add ios
           npx cap update ios
-      
+
       - name: Download Garmin SDK
         script: |
           git clone https://github.com/garmin/connectiq-companion-app-sdk-ios.git garmin-sdk
@@ -24,10 +24,8 @@ workflows:
 
       - name: Setup iOS Files (Plist & Camera)
         script: |
-          # 1. Création du dossier de l'app
           mkdir -p ios/App/App
-          
-          # 2. Génération du Info.plist indispensable
+
           cat <<'EOF' > ios/App/App/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -43,12 +41,10 @@ workflows:
           </dict></plist>
           EOF
 
-          # 3. Copie du CameraManager.swift
           if [ -f CameraManager.swift ]; then
             cp CameraManager.swift ios/App/App/CameraManager.swift
           fi
 
-          # 4. Injection de la logique de démarrage via extension
           cat <<'EOF' > ios/App/App/Injection.swift
           import UIKit
           import Capacitor
@@ -57,10 +53,10 @@ workflows:
           extension CAPBridgeViewController {
               override open func viewDidAppear(_ animated: Bool) {
                   super.viewDidAppear(animated)
-                  
+
                   let camera = CameraManager()
                   camera.setup()
-                  
+
                   let previewLayer = AVCaptureVideoPreviewLayer(session: camera.session)
                   previewLayer.videoGravity = .resizeAspectFill
                   previewLayer.frame = self.view.bounds
@@ -70,10 +66,10 @@ workflows:
           }
           EOF
 
-      - name: Configure Pods (Anti-Crash)
+      - name: Configure Pods
         script: |
           cat <<'EOF' > ios/App/Podfile
-          platform :ios, '14.0'
+          platform :ios, '16.0'
           use_frameworks!
 
           target 'App' do
@@ -84,19 +80,16 @@ workflows:
           post_install do |installer|
             installer.pods_project.targets.each do |target|
               target.build_configurations.each do |config|
+                config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '16.0'
                 config.build_settings['SWIFT_VERSION'] = '5.0'
                 config.build_settings['ENABLE_BITCODE'] = 'NO'
-                config.build_settings['SWIFT_COMPILATION_MODE'] = 'singlefile'
+                config.build_settings['SWIFT_COMPILATION_MODE'] = 'wholemodule'
                 config.build_settings['SWIFT_OPTIMIZATION_LEVEL'] = '-Onone'
 
-                # CORRECTIF 1 : bon Info.plist pour CapacitorCordova
                 if target.name == 'CapacitorCordova'
                   config.build_settings['INFOPLIST_FILE'] = '$(SRCROOT)/App/Info.plist'
                 end
 
-                # CORRECTIF 2 : isoler ConnectIQ — ne pas le linker dans les pods
-                # On retire OTHER_LDFLAGS et FRAMEWORK_SEARCH_PATHS hérités du workspace
-                # pour tous les targets SAUF 'App' (qui est dans App.xcodeproj, pas Pods)
                 other_ldflags = config.build_settings['OTHER_LDFLAGS'] || '$(inherited)'
                 if other_ldflags.is_a?(Array)
                   config.build_settings['OTHER_LDFLAGS'] = other_ldflags.reject { |f| f.include?('ConnectIQ') }
@@ -104,7 +97,6 @@ workflows:
                   config.build_settings['OTHER_LDFLAGS'] = other_ldflags.gsub('-framework ConnectIQ', '').strip
                 end
 
-                # Corriger le FRAMEWORK_SEARCH_PATHS : utiliser le bon chemin absolu
                 config.build_settings['FRAMEWORK_SEARCH_PATHS'] = [
                   '$(inherited)',
                   '$(SRCROOT)/../App/Frameworks'
@@ -114,18 +106,16 @@ workflows:
           end
           EOF
 
-          # Créer aussi le dossier Pods/App avec un Info.plist de secours
-          # au cas où Xcode le résolve avant le post_install
           mkdir -p ios/App/Pods/App
           cp ios/App/App/Info.plist ios/App/Pods/App/Info.plist
 
           cd ios/App && pod install --repo-update
 
-      - name: Build iOS App (Final)
+      - name: Build iOS App
         script: |
           cd ios/App
           mkdir -p build_output
-          
+
           xcodebuild build \
             -workspace App.xcworkspace \
             -scheme App \
@@ -138,11 +128,12 @@ workflows:
             CODE_SIGNING_REQUIRED=NO \
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
             ARCHS="arm64" \
+            ONLY_ACTIVE_ARCH=YES \
             SWIFT_USE_INTEGRATED_DRIVER=NO \
+            IPHONEOS_DEPLOYMENT_TARGET="16.0" \
             INFOPLIST_FILE="App/Info.plist" \
             FRAMEWORK_SEARCH_PATHS="$(inherited) $(PROJECT_DIR)/Frameworks" \
-            OTHER_LDFLAGS="$(inherited) -framework ConnectIQ" \
-            ONLY_ACTIVE_ARCH=YES
+            OTHER_LDFLAGS="$(inherited) -framework ConnectIQ"
 
       - name: Package IPA
         script: |
