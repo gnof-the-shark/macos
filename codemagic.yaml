@@ -67,7 +67,7 @@ workflows:
           EOF
           cd ios/App && pod install --repo-update
 
-- name: Build iOS App (Direct Output)
+      - name: Build iOS App (Direct Output)
         script: |
           cd ios/App
           mkdir -p build_output
