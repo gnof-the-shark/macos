@@ -20,10 +20,11 @@ workflows:
           mkdir -p ios/App/Frameworks
           cp -r garmin-sdk/ConnectIQ.xcframework ios/App/Frameworks/
 
-      - name: Create Info.plist & Inject Logic
+      - name: Create CameraLogic & Inject Files
         script: |
-          # 1. On crée le fichier de base
-          cat <<'EOF' > base_info.plist
+          # 1. On crée le Info.plist (indispensable)
+          mkdir -p ios/App/App
+          cat <<'EOF' > ios/App/App/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0"><dict>
@@ -38,33 +39,32 @@ workflows:
           </dict></plist>
           EOF
 
-          # 2. On le déploie PARTOUT pour satisfaire Xcode et les Pods
-          mkdir -p ios/App/App
-          mkdir -p ios/App/Pods/App
-          cp base_info.plist ios/App/App/Info.plist
-          cp base_info.plist ios/App/Pods/App/Info.plist
+          # 2. AU LIEU DE GREP : On déplace simplement ton fichier dans le dossier iOS
+          # Cela évite de corrompre le code source.
+          if [ -f CameraManager.swift ]; then
+            cp CameraManager.swift ios/App/App/CameraManager.swift
+          fi
 
-          # 3. Injection de ton code caméra (sans changement ici)
-          cat <<'EOF' > ios/App/App/CameraLogic.swift
+          # 3. On crée un pont propre entre Capacitor et ta caméra
+          cat <<'EOF' > ios/App/App/Injection.swift
           import UIKit
-          import AVFoundation
-          import ConnectIQ
-          class CameraOverlay {
-              static let shared = CameraOverlay()
-              lazy var cameraManager = CameraManager()
-              func show(on viewController: UIViewController) {
-                  cameraManager.setup()
-                  let previewLayer = AVCaptureVideoPreviewLayer(session: cameraManager.session)
+          import Capacitor
+
+          extension CAPBridgeViewController {
+              override open func viewDidAppear(_ animated: Bool) {
+                  super.viewDidAppear(animated)
+                  
+                  // On initialise la caméra sans modifier le fichier source
+                  let camera = CameraManager()
+                  camera.setup()
+                  
+                  let previewLayer = AVCaptureVideoPreviewLayer(session: camera.session)
                   previewLayer.videoGravity = .resizeAspectFill
-                  previewLayer.frame = viewController.view.bounds
-                  viewController.view.layer.insertSublayer(previewLayer, at: 0)
+                  previewLayer.frame = self.view.bounds
+                  self.view.layer.insertSublayer(previewLayer, at: 0)
               }
           }
           EOF
-          if [ -f CameraManager.swift ]; then
-            echo "\n" >> ios/App/App/CameraLogic.swift
-            grep -v "import " CameraManager.swift >> ios/App/App/CameraLogic.swift
-          fi
 
       - name: Configure Pods
         script: |
