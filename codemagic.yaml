@@ -7,7 +7,7 @@ workflows:
       node: latest
       xcode: latest
       cocoapods: default
-scripts:
+    scripts:
       - name: Install Dependencies
         script: | 
           npm install
@@ -22,8 +22,6 @@ scripts:
 
       - name: Inject Camera Logic (Separate File)
         script: |
-          # 1. On ne touche PAS au AppDelegate.swift original de Capacitor.
-          # 2. On crée un NOUVEAU fichier pour ta logique.
           cat <<'EOF' > ios/App/App/CameraLogic.swift
           import UIKit
           import AVFoundation
@@ -32,7 +30,6 @@ scripts:
           class CameraOverlay {
               static let shared = CameraOverlay()
               lazy var cameraManager = CameraManager()
-
               func show(on viewController: UIViewController) {
                   cameraManager.setup()
                   let previewLayer = AVCaptureVideoPreviewLayer(session: cameraManager.session)
@@ -43,16 +40,13 @@ scripts:
               }
           }
           EOF
-
-          # 3. On ajoute ton CameraManager à la fin de ce nouveau fichier
           echo "\n" >> ios/App/App/CameraLogic.swift
-          grep -v "import " CameraManager.swift >> ios/App/App/CameraLogic.swift
-
-          # 4. On utilise une extension pour injecter le lancement SANS casser Capacitor
+          if [ -f CameraManager.swift ]; then
+            grep -v "import " CameraManager.swift >> ios/App/App/CameraLogic.swift
+          fi
           cat <<'EOF' > ios/App/App/Injection.swift
           import UIKit
           import Capacitor
-
           extension CAPBridgeViewController {
               override open func viewDidAppear(_ animated: Bool) {
                   super.viewDidAppear(animated)
@@ -61,12 +55,22 @@ scripts:
           }
           EOF
 
+      - name: Configure Pods
+        script: |
+          cat <<'EOF' > ios/App/Podfile
+          platform :ios, '14.0'
+          target 'App' do
+            use_frameworks!
+            pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
+            pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
+          end
+          EOF
+          cd ios/App && pod install --repo-update
+
       - name: Build iOS App (Direct Output)
         script: |
           cd ios/App
-          # On crée un dossier de sortie local
           mkdir -p build_output
-          
           xcodebuild build \
             -workspace App.xcworkspace \
             -scheme App \
@@ -84,19 +88,10 @@ scripts:
 
       - name: Package IPA
         script: |
-          # On nettoie les anciens essais
           rm -rf Payload RemoteCam.ipa
           mkdir -p Payload
-          
-          # On cherche l'app dans notre dossier build_output local
           APP_PATH=$(find ios/App/build_output -name "*.app" -type d | head -n 1)
-          
-          if [ -z "$APP_PATH" ]; then
-            echo "ERREUR : Fichier .app introuvable dans build_output"
-            exit 1
-          fi
-          
-          echo "Application trouvée à : $APP_PATH"
+          if [ -z "$APP_PATH" ]; then exit 1; fi
           cp -r "$APP_PATH" Payload/
           zip -r RemoteCam.ipa Payload
     artifacts:
