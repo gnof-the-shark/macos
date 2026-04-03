@@ -1,0 +1,10 @@
+<key>NSCameraUsageDescription</key>
+<string>L'application a besoin de la caméra pour l'aperçu sur la montre.</string>
+<key>NSPhotoLibraryAddUsageDescription</key>
+<string>L'application enregistre les photos prises depuis la montre.</string>
+<key>NSBluetoothAlwaysUsageDescription</key>
+<string>Nécessaire pour communiquer avec la montre Garmin.</string>
+<key>LSApplicationQueriesSchemes</key>
+<array>
+    <string>garmin-connect-iq</string>
+</array>
