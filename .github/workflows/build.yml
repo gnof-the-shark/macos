@@ -1,4 +1,4 @@
-name: "Build Capacitor iOS with Icon"
+name: "Build RemoteCam Sideloadly"
 
 on:
   push:
@@ -23,31 +23,60 @@ jobs:
           npm install
           npx cap add ios
 
-      - name: Generate Icons
+      - name: Preparation des Ressources
         run: |
-          # S'assure que le dossier resources existe avec ton icône
-          if [ -f resources/icon.png ]; then
-            npx capacitor-assets generate --ios
-          else
-            echo "Attention: resources/icon.png manquant, icône par défaut utilisée."
-          fi
+          mkdir -p resources www
+          cp icon.png resources/icon.png 2>/dev/null || echo "icon.png manquant"
+          cp index.html www/index.html
+          npx @capacitor/assets generate --ios
 
-      - name: Build Web & Sync
+      - name: Sync Capacitor
         run: |
-          mkdir -p www
-          # On s'assure que l'index.html est là (évite l'écran blanc)
-          if [ ! -f www/index.html ]; then
-            echo "<!DOCTYPE html><html><body style='background:#000;color:#fff;display:flex;justify-content:center;align-items:center;height:100vh;'><h1>RemoteCam Active</h1></body></html>" > www/index.html
-          fi
           npx cap copy ios
           npx cap sync ios
+
+      - name: Injection du Code Swift
+        run: |
+          # On déplace tes fichiers vers le projet iOS généré par GitHub
+          cp CameraManager.swift ios/App/App/
+          cp ContentView.swift ios/App/App/
+          
+          # On crée le fichier de démarrage pour forcer la caméra sous le texte
+          cat <<EOF > ios/App/App/AppDelegate.swift
+          import UIKit
+          import Capacitor
+          import AVFoundation
+
+          @UIApplicationMain
+          class AppDelegate: UIResponder, UIApplicationDelegate {
+              var window: UIWindow?
+              var cameraManager = CameraManager()
+              func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+                  cameraManager.setup()
+                  let previewLayer = AVCaptureVideoPreviewLayer(session: cameraManager.session)
+                  previewLayer.videoGravity = .resizeAspectFill
+                  DispatchQueue.main.async {
+                      if let rootVC = self.window?.rootViewController {
+                          previewLayer.frame = rootVC.view.bounds
+                          rootVC.view.layer.insertSublayer(previewLayer, at: 0)
+                          rootVC.view.backgroundColor = .clear
+                          for subview in rootVC.view.subviews {
+                              subview.backgroundColor = .clear
+                              if let webView = subview as? UIView { webView.isOpaque = false; webView.backgroundColor = .clear }
+                          }
+                      }
+                  }
+                  return true
+              }
+          }
+          EOF
 
       - name: Install Pods
         run: |
           cd ios/App
           pod install
 
-      - name: Compile iOS App (Unsigned)
+      - name: Compilation (IPA non signé)
         run: |
           cd ios/App
           xcodebuild build \
@@ -56,18 +85,17 @@ jobs:
             -sdk iphoneos \
             -configuration Release \
             CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            ENTITLEMENTS_REQUIRED=NO
+            CODE_SIGNING_REQUIRED=NO
 
-      - name: Create IPA
+      - name: Preparation du fichier IPA
         run: |
           mkdir -p Payload
-          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "App.app" -type d | head -n 1)
-          cp -r "$APP_PATH" Payload/
-          zip -r RemoteCam_Final.ipa Payload
+          APP_PATH=\$(find ~/Library/Developer/Xcode/DerivedData -name "App.app" -type d | head -n 1)
+          cp -r "\$APP_PATH" Payload/
+          zip -r RemoteCam_Ready.ipa Payload
 
-      - name: Upload IPA
+      - name: Envoi du fichier
         uses: actions/upload-artifact@v4
         with:
           name: RemoteCam-Final-IPA
-          path: RemoteCam_Final.ipa
+          path: RemoteCam_Ready.ipa
