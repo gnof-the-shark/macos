@@ -52,7 +52,7 @@ class CameraManager: NSObject, ObservableObject, IQDeviceEventDelegate, IQAppMes
     private let photoOutput = AVCapturePhotoOutput()
     
     // UUID de l'app Connect IQ sur la montre (à remplacer par votre propre App ID)
-    private let garminAppID = UUID(uuidString: "MY_GARMIN_APP_ID")!
+    private let garminAppID = UUID(uuidString: "5e59696a-c38b-4afe-b787-9433a22bfae2")!
     
     func checkPermissions() {
         // Code pour demander l'accès à la caméra
