@@ -1,7 +1,7 @@
 {
   "name": "sport-tracker-white",
   "version": "1.0.0",
-  "description": "Application de suivi de sport avec Firebase et Capacitor",
+  "description": "Application de suivi de sport avec Garmin ConnectIQ et Capacitor",
   "main": "index.html",
   "dependencies": {
     "@capacitor/core": "^5.7.0",
@@ -11,6 +11,6 @@
     "@capacitor/cli": "^5.7.0"
   },
   "scripts": {
-    "build": "mkdir -p www && cp index.html styles.css app.js admin.js firebase-config.js www/"
+    "build": "mkdir -p www && cp index.html styles.css app.js admin.js www/ 2>/dev/null || true"
   }
 }

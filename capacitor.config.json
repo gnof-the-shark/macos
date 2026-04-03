@@ -1,5 +1,8 @@
 {
   "appId": "com.gnoftheshark.sporttracker",
   "appName": "Sport Tracker",
-  "webDir": "www"
+  "webDir": "www",
+  "ios": {
+    "scheme": "sporttracker"
+  }
 }

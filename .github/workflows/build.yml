@@ -27,21 +27,24 @@ jobs:
 
       - name: Build Web Folder
         run: |
-          # On crée un dossier propre pour les fichiers web
+          # On crée un dossier propre pour les fichiers web (placeholder pour Capacitor)
           mkdir -p www
           cp index.html www/ 2>/dev/null || true
           cp styles.css www/ 2>/dev/null || true
           cp app.js www/ 2>/dev/null || true
           cp admin.js www/ 2>/dev/null || true
-          cp firebase-config.js www/ 2>/dev/null || true
           
           # Si index.html n'est pas là, on regarde s'il est dans un sous-dossier par erreur
           if [ ! -f "www/index.html" ]; then
-            find . -name "index.html" -exec cp {} www/ \;
-            find . -name "styles.css" -exec cp {} www/ \;
-            find . -name "app.js" -exec cp {} www/ \;
-            find . -name "admin.js" -exec cp {} www/ \;
-            find . -name "firebase-config.js" -exec cp {} www/ \;
+            find . -name "index.html" -not -path "./.git/*" -exec cp {} www/ \;
+            find . -name "styles.css" -not -path "./.git/*" -exec cp {} www/ \;
+            find . -name "app.js" -not -path "./.git/*" -exec cp {} www/ \;
+            find . -name "admin.js" -not -path "./.git/*" -exec cp {} www/ \;
+          fi
+          
+          # Page d'accueil minimale si aucun fichier web n'existe
+          if [ ! -f "www/index.html" ]; then
+            echo '<html><body><p>Sport Tracker</p></body></html>' > www/index.html
           fi
 
       - name: Capacitor Setup
@@ -51,11 +54,20 @@ jobs:
           npx cap add ios
           npx cap sync ios
 
-      - name: Copy GoogleService-Info.plist
+      - name: Copy ContentView.swift into iOS project
         run: |
-          cp GoogleService-Info.plist ios/App/App/
+          cp ContentView.swift ios/App/App/
 
-      - name: Add Firebase via Swift Package Manager
+      - name: Add camera permission to Info.plist
+        run: |
+          /usr/libexec/PlistBuddy -c \
+            "Add :NSCameraUsageDescription string 'Nécessaire pour prendre des photos déclenchées par la montre Garmin'" \
+            ios/App/App/Info.plist 2>/dev/null || \
+          /usr/libexec/PlistBuddy -c \
+            "Set :NSCameraUsageDescription 'Nécessaire pour prendre des photos déclenchées par la montre Garmin'" \
+            ios/App/App/Info.plist
+
+      - name: Add ConnectIQ via Swift Package Manager
         run: |
           gem install xcodeproj --no-document 2>/dev/null || true
           ruby << 'RUBYEOF'
@@ -64,18 +76,18 @@ jobs:
           project_path = 'ios/App/App.xcodeproj'
           project = Xcodeproj::Project.open(project_path)
 
-          # Add Firebase remote package reference
+          # Add ConnectIQ remote package reference
           package = project.new(Xcodeproj::Project::Object::XCRemoteSwiftPackageReference)
-          package.repositoryURL = 'https://github.com/firebase/firebase-ios-sdk'
-          package.requirement = { 'kind' => 'upToNextMajorVersion', 'minimumVersion' => '11.0.0' }
+          package.repositoryURL = 'https://github.com/garmin/connectiq-apple-sdk'
+          package.requirement = { 'kind' => 'upToNextMajorVersion', 'minimumVersion' => '1.0.0' }
           project.root_object.package_references << package
 
-          # Add FirebaseAnalytics to App target
+          # Add ConnectIQ to App target
           target = project.targets.find { |t| t.name == 'App' }
           if target
             product = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
             product.package = package
-            product.product_name = 'FirebaseAnalytics'
+            product.product_name = 'ConnectIQ'
             target.package_product_dependencies << product
 
             build_file = project.new(Xcodeproj::Project::Object::PBXBuildFile)
@@ -84,15 +96,15 @@ jobs:
           end
 
           project.save
-          puts "Firebase SPM dependency added successfully"
+          puts "ConnectIQ SPM dependency added successfully"
           RUBYEOF
 
-      - name: Setup AppDelegate with Firebase
+      - name: Setup AppDelegate with ConnectIQ
         run: |
           cat > ios/App/App/AppDelegate.swift << 'SWIFT'
           import UIKit
           import Capacitor
-          import FirebaseCore
+          import ConnectIQ
 
           @UIApplicationMain
           class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -102,12 +114,15 @@ jobs:
             func application(_ application: UIApplication,
               didFinishLaunchingWithOptions launchOptions:
                 [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-              FirebaseApp.configure()
+              ConnectIQ.sharedInstance().initialize(withUrlScheme: "sporttracker", uiOverrideDelegate: nil)
               return true
             }
 
             func application(_ app: UIApplication, open url: URL,
               options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+              if ConnectIQ.sharedInstance().handleOpenURL(url, fromSourceApplication: options[.sourceApplication] as? String) {
+                return true
+              }
               return ApplicationDelegateProxy.shared.application(app, open: url, options: options)
             }
 
@@ -119,7 +134,7 @@ jobs:
           }
           SWIFT
 
-      - name: Resolve Firebase Package Dependencies
+      - name: Resolve Package Dependencies
         run: |
           cd ios/App
           xcodebuild -resolvePackageDependencies \
