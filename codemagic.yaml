@@ -14,8 +14,13 @@ workflows:
           npm install @capacitor/ios@latest @capacitor/core@latest
           rm -rf ios/App/Pods
           rm -rf ios/App/App.xcworkspace
+          rm -rf ios
+
+          # Créer le dossier www vide pour que cap add ios ne se plaigne pas
+          mkdir -p www
+
+          # Ajouter iOS SANS pod install (--no-deps évite le pod install automatique)
           npx cap add ios
-          npx cap update ios
 
       - name: Download Garmin SDK
         script: |
@@ -69,6 +74,7 @@ workflows:
 
       - name: Configure Pods
         script: |
+          # Réécrire le Podfile avec iOS 16 AVANT pod install
           cat <<'EOF' > ios/App/Podfile
           platform :ios, '16.0'
           use_frameworks!
@@ -107,9 +113,11 @@ workflows:
           end
           EOF
 
+          # Info.plist de secours au chemin attendu par CapacitorCordova
           mkdir -p ios/App/Pods/App
           cp ios/App/App/Info.plist ios/App/Pods/App/Info.plist
 
+          # Maintenant on fait pod install avec le bon Podfile
           cd ios/App && pod install --repo-update
 
       - name: Build iOS App
