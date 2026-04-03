@@ -26,8 +26,14 @@ jobs:
       - name: Preparation des Ressources
         run: |
           mkdir -p resources www
+          # Copie de l'icône si elle existe à la racine
           if [ -f icon.png ]; then cp icon.png resources/icon.png; fi
-          cp index.html www/index.html 2>/dev/null || echo "<html><body style='background:transparent;'></body></html>" > www/index.html
+          # Création d'un index.html de secours si absent
+          if [ ! -f index.html ]; then
+            echo "<!DOCTYPE html><html><body style='background:transparent;'></body></html>" > www/index.html
+          else
+            cp index.html www/index.html
+          fi
           npx @capacitor/assets generate --ios
 
       - name: Sync Capacitor
@@ -35,13 +41,14 @@ jobs:
           npx cap copy ios
           npx cap sync ios
 
-- name: Fusion du Code Swift
+      - name: Fusion du Code Swift (AppDelegate + CameraManager)
         run: |
-          cat <<EOF > ios/App/App/AppDelegate.swift
+          # Création du fichier AppDelegate avec le support natif de la caméra
+          cat <<'EOF' > ios/App/App/AppDelegate.swift
           import UIKit
           import Capacitor
           import AVFoundation
-          import ConnectIQ 
+          import ConnectIQ
 
           @UIApplicationMain
           class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -71,7 +78,6 @@ jobs:
               }
           }
 
-          // Cette extension est nécessaire pour que CameraManager puisse envoyer des petites images
           extension UIImage {
               func resized(to size: CGSize) -> UIImage? {
                   UIGraphicsBeginImageContextWithOptions(size, false, 0.0)
@@ -82,11 +88,21 @@ jobs:
               }
           }
           EOF
+          
+          # On ajoute ton fichier CameraManager.swift à la suite en ignorant ses imports
+          if [ -f CameraManager.swift ]; then
+            grep -v "import " CameraManager.swift >> ios/App/App/AppDelegate.swift
+          else
+            echo "ERREUR: CameraManager.swift introuvable à la racine"
+            exit 1
+          fi
 
-          # On ajoute ton CameraManager.swift en retirant ses propres imports pour éviter les doublons
-          grep -v "import " CameraManager.swift >> ios/App/App/AppDelegate.swift
+      - name: Install Pods (Garmin SDK)
+        run: |
+          cd ios/App
+          pod install --repo-update
 
-      - name: Compilation
+      - name: Compilation Xcode (Unsigned)
         run: |
           cd ios/App
           xcodebuild build \
@@ -95,17 +111,19 @@ jobs:
             -sdk iphoneos \
             -configuration Release \
             CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO
+            CODE_SIGNING_REQUIRED=NO \
+            ENTITLEMENTS_REQUIRED=NO
 
-      - name: Preparation du fichier IPA
+      - name: Creation de l'IPA
         run: |
           mkdir -p Payload
-          APP_PATH=\$(find ~/Library/Developer/Xcode/DerivedData -name "App.app" -type d | head -n 1)
-          cp -r "\$APP_PATH" Payload/
+          # Recherche dynamique du dossier de compilation
+          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "App.app" -type d | head -n 1)
+          cp -r "$APP_PATH" Payload/
           zip -r RemoteCam_Final.ipa Payload
 
-      - name: Envoi du fichier
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: RemoteCam-Final-IPA
+          name: RemoteCam-iOS-IPA
           path: RemoteCam_Final.ipa
