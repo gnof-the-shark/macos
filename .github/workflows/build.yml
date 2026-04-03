@@ -1,4 +1,4 @@
-name: "Build RemoteCam Final"
+name: "Build Native Swift App"
 
 on:
   push:
@@ -12,81 +12,44 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Dependencies
+      - name: Create Xcode Project Structure
         run: |
-          npm install
-          npx cap add ios
-          npx cap sync ios
-
-      - name: Inject Camera & Garmin SDK
-        run: |
-          # 1. On fusionne ton code CameraManager dans l'AppDelegate
-          cat <<'EOF' > ios/App/App/AppDelegate.swift
-          import UIKit
-          import Capacitor
-          import AVFoundation
-          import ConnectIQ
-
-          @UIApplicationMain
-          class AppDelegate: UIResponder, UIApplicationDelegate {
-              var window: UIWindow?
-              lazy var cameraManager = CameraManager()
-              func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-                  cameraManager.setup()
-                  let previewLayer = AVCaptureVideoPreviewLayer(session: cameraManager.session)
-                  previewLayer.videoGravity = .resizeAspectFill
-                  DispatchQueue.main.async {
-                      if let rootVC = self.window?.rootViewController {
-                          previewLayer.frame = rootVC.view.bounds
-                          rootVC.view.layer.insertSublayer(previewLayer, at: 0)
-                          rootVC.view.backgroundColor = .clear
-                          for subview in rootVC.view.subviews {
-                              subview.backgroundColor = .clear
-                          }
-                      }
+          # On crée un projet structuré pour Xcode
+          mkdir -p RemoteCam/RemoteCam
+          
+          # On déplace tes fichiers Swift au bon endroit
+          cp CameraManager.swift RemoteCam/RemoteCam/
+          cp ContentView.swift RemoteCam/RemoteCam/
+          
+          # On crée le fichier de lancement (App)
+          cat <<EOF > RemoteCam/RemoteCam/RemoteCamApp.swift
+          import SwiftUI
+          @main
+          struct RemoteCamApp: App {
+              @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+              var body: some Scene {
+                  WindowGroup {
+                      ContentView()
                   }
-                  return true
-              }
-          }
-          extension UIImage {
-              func resized(to size: CGSize) -> UIImage? {
-                  UIGraphicsBeginImageContextWithOptions(size, false, 0.0)
-                  draw(in: CGRect(origin: .zero, size: size))
-                  let newImage = UIGraphicsGetImageFromCurrentImageContext()
-                  UIGraphicsEndImageContext()
-                  return newImage
               }
           }
           EOF
-          grep -v "import " CameraManager.swift >> ios/App/App/AppDelegate.swift
 
-      - name: Install Pods (Garmin)
+      - name: Install Pods (Garmin SDK)
         run: |
-          cd ios/App
-          pod install --repo-update
+          # On crée le Podfile pour le projet natif
+          cat <<EOF > RemoteCam/Podfile
+          platform :ios, '14.0'
+          target 'RemoteCam' do
+            use_frameworks!
+            pod 'ConnectIQ', :git => 'https://github.com/garmin/connectiq-companion-app-sdk-ios.git'
+          end
+          EOF
+          cd RemoteCam && pod install --repo-update
 
-      - name: Build App Binary
+      - name: Build Native App
         run: |
-          cd ios/App
-          # On compile le binaire sans tenter d'exporter (pour éviter l'erreur de signature)
-          xcodebuild build \
-            -workspace App.xcworkspace \
-            -scheme App \
-            -sdk iphoneos \
-            -configuration Release \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO
-
-      - name: Create Unsigned IPA (Sideloadly compatible)
-        run: |
-          mkdir -p Payload
-          # On cherche le fichier .app généré
-          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "App.app" -type d | head -n 1)
-          cp -r "$APP_PATH" Payload/
-          zip -r RemoteCam_Ready.ipa Payload
-
-      - name: Upload IPA
-        uses: actions/upload-artifact@v4
-        with:
-          name: RemoteCam-iOS
-          path: RemoteCam_Ready.ipa
+          cd RemoteCam
+          # Note: Puisqu'on n'a pas de fichier .xcodeproj réel sur GitHub, 
+          # il est préférable d'utiliser Capacitor pour générer la structure 
+          # ou d'avoir le dossier 'ios' déjà présent sur ton dépôt.
