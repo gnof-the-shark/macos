@@ -1,4 +1,4 @@
-name: "Build IPA for Sideloadly"
+name: "Build Capacitor iOS"
 
 on:
   push:
@@ -13,34 +13,45 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Xcode
-        uses: maxim-lobanov/setup-xcode@v1
+      - name: Install Node.js
+        uses: actions/setup-node@v4
         with:
-          xcode-version: 'latest-stable'
+          node-version: 20
 
-      - name: Compile Swift Project
+      - name: Install Dependencies
         run: |
-          # Compilation du binaire pour processeur ARM64 (iPhone)
-          swift build -c release --triple arm64-apple-ios15.0-simulator 
-          # Note: On utilise le SDK iphoneos pour un vrai build
-          xcodebuild -scheme RemoteCam -destination 'generic/platform=iOS' -configuration Release build CODE_SIGNING_ALLOWED=NO
+          npm install
+          npx cap add ios
 
-      - name: Create IPA Structure
+      - name: Build Web & Sync Capacitor
         run: |
-          mkdir -p Payload/RemoteCam.app
-          
-          # Trouver le binaire compilé
-          APP_BINARY=$(find .build -name "RemoteCam" -type f | head -n 1)
-          cp "$APP_BINARY" Payload/RemoteCam.app/RemoteCam
-          
-          # Copier les ressources essentielles
-          cp Info.plist Payload/RemoteCam.app/
-          
-          # Créer l'IPA
-          zip -r RemoteCam_Unsigned.ipa Payload
+          # Simule un build web (ou utilise ton propre script build)
+          mkdir -p www
+          echo "<html><body>Camera Bridge Ready</body></html>" > www/index.html
+          npx cap copy ios
+          npx cap sync ios
 
-      - name: Upload Artifact
+      - name: Compile iOS App (Unsigned)
+        run: |
+          cd ios/App
+          xcodebuild build \
+            -scheme App \
+            -sdk iphoneos \
+            -configuration Release \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            ENTITLEMENTS_REQUIRED=NO
+
+      - name: Create IPA for Sideloadly
+        run: |
+          mkdir -p Payload
+          # Localiser le .app généré par Capacitor
+          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "App.app" -type d | head -n 1)
+          cp -r "$APP_PATH" Payload/
+          zip -r RemoteCam_Capacitor.ipa Payload
+
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: RemoteCam-IPA
-          path: RemoteCam_Unsigned.ipa
+          name: RemoteCam-Capacitor-IPA
+          path: RemoteCam_Capacitor.ipa
