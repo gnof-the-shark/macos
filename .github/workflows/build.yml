@@ -1,51 +1,47 @@
-name: Build Garmin Photo IPA
-on: [push]
+name: "Build for Sideloadly"
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: macos-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install xcodegen
-        run: brew install xcodegen
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: 'latest-stable'
 
-      - name: Generate Xcode project
-        run: xcodegen generate
-
-      - name: Configure Git credentials for Swift Package Manager
+      - name: Build App Data
         run: |
-          git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
-
-      - name: Resolve Package Dependencies
-        run: |
-          xcodebuild -resolvePackageDependencies \
-            -project GarminPhoto.xcodeproj \
-            -scheme App
-
-      - name: Build IPA
-        run: |
-          xcodebuild archive \
-            -project GarminPhoto.xcodeproj \
-            -scheme App \
-            -configuration Debug \
-            -archivePath GarminPhoto.xcarchive \
+          # On compile le projet en mode "Release" pour l'architecture iPhone
+          # Remplace 'TonNomDeProjet' par le nom de ton fichier .xcodeproj
+          xcodebuild build \
+            -scheme "TonNomDeProjet" \
             -sdk iphoneos \
+            -configuration Release \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             ENTITLEMENTS_REQUIRED=NO
 
-      - name: Package
+      - name: Prepare IPA Folder
         run: |
+          # On crée la structure d'un IPA (un dossier nommé Payload contenant le .app)
           mkdir -p Payload
-          cp -r GarminPhoto.xcarchive/Products/Applications/App.app Payload/
-          zip -r GarminPhoto.ipa Payload/
+          # On va chercher le .app compilé dans les dossiers de build par défaut de Xcode
+          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "*.app" | head -n 1)
+          cp -r "$APP_PATH" Payload/
+          # On compresse le tout en .zip mais on le nomme .ipa
+          zip -r RemoteCam_Unsigned.ipa Payload
 
-      - name: Upload
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Garmin-Photo-IPA
-          path: GarminPhoto.ipa
-
+          name: RemoteCam-Unsigned-IPA
+          path: RemoteCam_Unsigned.ipa
