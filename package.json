@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "RemoteCam iOS app via Capacitor",
   "scripts": {
-    "build": "mkdir -p www && cp index.html www/ && cp node_modules/@zxing/library/umd/zxing-library.min.js www/",
+    "build": "mkdir -p www && cp index.html www/ && cp node_modules/@zxing/library/umd/index.min.js www/zxing-library.min.js",
     "res": "capacitor-assets generate"
   },
   "dependencies": {
