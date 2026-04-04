@@ -13,88 +13,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Node & Capacitor
-        run: |
-          npm install
-          npx cap add ios
+      - name: Install dependencies
+        run: npm install
 
-      - name: Copie du index.html dans www/
-        run: |
-          mkdir -p www
-          cp index.html www/index.html
+      - name: Copie index.html dans www/
+        run: npm run build
 
-      - name: Téléchargement Manuel du SDK Garmin
-        run: |
-          git clone https://github.com/garmin/connectiq-companion-app-sdk-ios.git garmin-sdk
-          mkdir -p ios/App/Frameworks
-          cp -r garmin-sdk/ConnectIQ.xcframework ios/App/Frameworks/
+      - name: Génération des icônes depuis icon.png
+        run: npm run res
+
+      - name: Initialisation iOS Capacitor
+        run: npx cap add ios
 
       - name: Sync Capacitor
         run: npx cap sync ios
 
-      - name: Injection du Code Swift Natif (AppDelegate)
-        run: |
-          cat <<'EOF' > ios/App/App/AppDelegate.swift
-          import UIKit
-          import Capacitor
-          import AVFoundation
-          import ConnectIQ
-
-          @UIApplicationMain
-          class AppDelegate: UIResponder, UIApplicationDelegate {
-              var window: UIWindow?
-              lazy var cameraManager = CameraManager()
-
-              func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-                  cameraManager.setup()
-                  let previewLayer = AVCaptureVideoPreviewLayer(session: cameraManager.session)
-                  previewLayer.videoGravity = .resizeAspectFill
-
-                  DispatchQueue.main.async {
-                      if let rootVC = self.window?.rootViewController {
-                          previewLayer.frame = rootVC.view.bounds
-                          rootVC.view.layer.insertSublayer(previewLayer, at: 0)
-                          rootVC.view.backgroundColor = .clear
-                          for subview in rootVC.view.subviews {
-                              subview.backgroundColor = .clear
-                              (subview as? UIView)?.isOpaque = false
-                          }
-                      }
-                  }
-                  return true
-              }
-          }
-
-          extension UIImage {
-              func resized(to size: CGSize) -> UIImage? {
-                  UIGraphicsBeginImageContextWithOptions(size, false, 0.0)
-                  draw(in: CGRect(origin: .zero, size: size))
-                  let newImage = UIGraphicsGetImageFromCurrentImageContext()
-                  UIGraphicsEndImageContext()
-                  return newImage
-              }
-          }
-          EOF
-
-          echo -e "\n// --- CameraManager Logic ---" >> ios/App/App/AppDelegate.swift
-          if [ -f CameraManager.swift ]; then
-            grep -v "^import " CameraManager.swift >> ios/App/App/AppDelegate.swift
-          else
-            echo "ERREUR : CameraManager.swift absent à la racine !"
-            exit 1
-          fi
-
-      - name: Configuration de Capacitor (Podfile)
-        run: |
-          cat <<'EOF' > ios/App/Podfile
-          platform :ios, '13.0'
-          target 'App' do
-            use_frameworks!
-            pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
-            pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
-          end
-          EOF
-          cd ios/App && pod install --repo-update
+      - name: Pod install
+        run: cd ios/App && pod install --repo-update
 
       - name: Compilation Xcode (non signé)
         run: |
@@ -105,9 +40,7 @@ jobs:
             -sdk iphoneos \
             -configuration Release \
             CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            FRAMEWORK_SEARCH_PATHS="$(inherited) '$(SRCROOT)/Frameworks'" \
-            OTHER_LDFLAGS="$(inherited) -framework ConnectIQ"
+            CODE_SIGNING_REQUIRED=NO
 
       - name: Création du fichier IPA (non signé)
         run: |
