@@ -40,6 +40,9 @@ jobs:
       - name: Prépare les icônes
         run: mkdir -p assets && cp icon123.png assets/icon-only.png
 
+      - name: Rebuild sharp pour darwin-arm64
+        run: npm install --platform=darwin --arch=arm64 sharp
+
       - name: Génération des icônes depuis icon.png
         run: npm run res
 
