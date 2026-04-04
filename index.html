@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Congélo Stock - Liquid Glass</title>
-    <script src="https://unpkg.com/@zxing/library@latest"></script>
+    <script src="./zxing-library.min.js"></script>
     <style>
         :root {
             --primary: #34C759;
@@ -207,7 +207,7 @@
     <!-- AJOUTER -->
     <div id="page-add" class="page">
         <div id="scan-ui">
-            <div id="video-container"><video id="video"></video></div>
+            <div id="video-container"><video id="video" playsinline muted></video></div>
             <button class="btn" id="start-scan-btn" onclick="startScan()">📷 Scanner un code</button>
             <button class="btn" style="background:var(--glass-bg); color:var(--text-main); border: 1px solid var(--glass-border);" onclick="manualAdd()">✏️ Saisie manuelle</button>
             <button class="btn" style="background:transparent; color:var(--accent);" onclick="toggleLocationManager()">⚙️ Gérer les tiroirs</button>
@@ -426,7 +426,7 @@
                         }
                     }
                 });
-            } catch (err) { stopScan(); }
+            } catch (err) { stopScan(); showError("Impossible d'accéder à la caméra : " + (err.message || err)); }
         }
 
         function manualAdd() {

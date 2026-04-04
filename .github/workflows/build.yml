@@ -30,6 +30,10 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync ios
 
+      - name: Ajout de NSCameraUsageDescription dans Info.plist
+        run: |
+          /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 'Accès à la caméra requis pour scanner des codes-barres.'" ios/App/App/Info.plist
+
       - name: Copie du Podfile personnalisé
         run: cp podfile ios/App/Podfile
 
