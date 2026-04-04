@@ -34,7 +34,7 @@ jobs:
         run: cp podfile ios/App/Podfile
 
       - name: Prépare les icônes
-        run: mkdir -p assets && cp icon.png assets/icon-only.png
+        run: mkdir -p assets && cp icon123.png assets/icon-only.png
 
       - name: Génération des icônes depuis icon.png
         run: npm run res
