@@ -1,6 +1,6 @@
 {
-  "appId": "com.gnof.remotecam",
-  "appName": "RemoteCam",
+  "appId": "com.gnof.congelo",
+  "appName": "Congélo",
   "webDir": "www",
   "bundledWebRuntime": false
 }
