@@ -17,7 +17,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 18
-          cache: npm
 
       - name: Install dependencies
         run: npm install
@@ -30,6 +29,12 @@ jobs:
 
       - name: Sync Capacitor
         run: npx cap sync ios
+
+      - name: Copie du Podfile personnalisé
+        run: cp podfile ios/App/Podfile
+
+      - name: Prépare les icônes
+        run: mkdir -p assets && cp icon.png assets/icon-only.png
 
       - name: Génération des icônes depuis icon.png
         run: npm run res
