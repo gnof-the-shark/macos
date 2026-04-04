@@ -1,0 +1,17 @@
+{
+  "name": "remotecam",
+  "version": "1.0.0",
+  "description": "RemoteCam iOS app via Capacitor",
+  "scripts": {
+    "build": "mkdir -p www && cp index.html www/",
+    "res": "capacitor-assets generate"
+  },
+  "dependencies": {
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/ios": "^6.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.0",
+    "@capacitor/cli": "^6.0.0"
+  }
+}
