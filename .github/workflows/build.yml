@@ -1,4 +1,4 @@
-name: "Build RemoteCam Native-Hybrid"
+name: "Build RemoteCam iOS (unsigned)"
 
 on:
   push:
@@ -13,92 +13,33 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Node & Capacitor
-        run: |
-          npm install
-          npx cap add ios
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
 
-      - name: Téléchargement Manuel du SDK Garmin
-        run: |
-          # On récupère le SDK Garmin
-          git clone https://github.com/garmin/connectiq-companion-app-sdk-ios.git garmin-sdk
-          mkdir -p ios/App/Frameworks
-          cp -r garmin-sdk/ConnectIQ.xcframework ios/App/Frameworks/
+      - name: Install dependencies
+        run: npm install
 
-      - name: Préparation du HTML vide
-        run: |
-          mkdir -p www
-          echo "<!DOCTYPE html><html><body style='background:transparent;'></body></html>" > www/index.html
-          npx cap sync ios
+      - name: Copie index.html dans www/
+        run: npm run build
 
-      - name: Injection du Code Swift Natif (AppDelegate)
-        run: |
-          cat <<'EOF' > ios/App/App/AppDelegate.swift
-          import UIKit
-          import Capacitor
-          import AVFoundation
-          import ConnectIQ
+      - name: Initialisation iOS Capacitor
+        run: npx cap add ios
 
-          @UIApplicationMain
-          class AppDelegate: UIResponder, UIApplicationDelegate {
-              var window: UIWindow?
-              lazy var cameraManager = CameraManager()
-              
-              func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-                  cameraManager.setup()
-                  let previewLayer = AVCaptureVideoPreviewLayer(session: cameraManager.session)
-                  previewLayer.videoGravity = .resizeAspectFill
-                  
-                  DispatchQueue.main.async {
-                      if let rootVC = self.window?.rootViewController {
-                          previewLayer.frame = rootVC.view.bounds
-                          rootVC.view.layer.insertSublayer(previewLayer, at: 0)
-                          rootVC.view.backgroundColor = .clear
-                          for subview in rootVC.view.subviews {
-                              subview.backgroundColor = .clear
-                              (subview as? UIView)?.isOpaque = false
-                          }
-                      }
-                  }
-                  return true
-              }
-          }
+      - name: Sync Capacitor
+        run: npx cap sync ios
 
-          extension UIImage {
-              func resized(to size: CGSize) -> UIImage? {
-                  UIGraphicsBeginImageContextWithOptions(size, false, 0.0)
-                  draw(in: CGRect(origin: .zero, size: size))
-                  let newImage = UIGraphicsGetImageFromCurrentImageContext()
-                  UIGraphicsEndImageContext()
-                  return newImage
-              }
-          }
-          EOF
+      - name: Génération des icônes depuis icon.png
+        run: npm run res
 
-          echo -e "\n// --- CameraManager Logic ---" >> ios/App/App/AppDelegate.swift
-          if [ -f CameraManager.swift ]; then
-            grep -v "import " CameraManager.swift >> ios/App/App/AppDelegate.swift
-          else
-            echo "ERREUR : CameraManager.swift absent à la racine !"
-            exit 1
-          fi
+      - name: Pod install
+        run: cd ios/App && pod install --repo-update
 
-      - name: Configuration de Capacitor (Podfile)
-        run: |
-          cat <<'EOF' > ios/App/Podfile
-          platform :ios, '13.0'
-          target 'App' do
-            use_frameworks!
-            pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
-            pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
-          end
-          EOF
-          cd ios/App && pod install --repo-update
-
-      - name: Compilation Xcode (Lien vers Garmin)
+      - name: Compilation Xcode (non signé)
         run: |
           cd ios/App
-          # Utilisation de SRCROOT pour garantir que Xcode trouve le dossier Frameworks
           xcodebuild build \
             -workspace App.xcworkspace \
             -scheme App \
@@ -106,22 +47,21 @@ jobs:
             -configuration Release \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            FRAMEWORK_SEARCH_PATHS="$(inherited) '$(SRCROOT)/Frameworks'" \
-            OTHER_LDFLAGS="$(inherited) -framework ConnectIQ"
+            -derivedDataPath DerivedData
 
-      - name: Création du fichier IPA
+      - name: Création du fichier IPA (non signé)
         run: |
           mkdir -p Payload
-          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "App.app" -type d | head -n 1)
-          if [ -z "$APP_PATH" ]; then 
+          APP_PATH=ios/App/DerivedData/Build/Products/Release-iphoneos/App.app
+          if [ ! -d "$APP_PATH" ]; then
             echo "Erreur : App.app introuvable"
             exit 1
           fi
           cp -r "$APP_PATH" Payload/
-          zip -r RemoteCam_Final.ipa Payload
+          zip -r RemoteCam_Unsigned.ipa Payload
 
-      - name: Upload Artifact
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
           name: RemoteCam-IPA
-          path: RemoteCam_Final.ipa
+          path: RemoteCam_Unsigned.ipa
