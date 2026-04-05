@@ -461,7 +461,7 @@
                             showPreview();
                         } else {
                             showError("Produit non reconnu, réessayez.");
-                            setTimeout(() => startScan(), 2000);
+                            setTimeout(() => { if (!isScanning) startScan(); }, 2000);
                         }
                     }
                 });
