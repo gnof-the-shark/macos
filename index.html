@@ -155,8 +155,30 @@
         #video-container { 
             width: 100%; border-radius: 24px; overflow: hidden; 
             background: #000; box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            position: relative; aspect-ratio: 4/3;
         }
-        video { width: 100%; display: block; }
+        video { width: 100%; height: 100%; display: block; object-fit: cover; }
+
+        #scan-overlay {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            display: none; align-items: center; justify-content: center;
+            pointer-events: none;
+        }
+        #scan-overlay.active { display: flex; }
+        #scan-frame {
+            width: 65%; aspect-ratio: 1;
+            border: 2px solid rgba(255,255,255,0.85);
+            border-radius: 16px;
+            box-shadow: 0 0 0 4000px rgba(0,0,0,0.38);
+            position: relative; overflow: hidden;
+        }
+        #scan-line {
+            position: absolute; top: 0; left: 0; right: 0;
+            height: 2px; background: var(--primary);
+            box-shadow: 0 0 8px var(--primary), 0 0 16px var(--primary);
+            animation: scanLine 1.8s ease-in-out infinite;
+        }
+        @keyframes scanLine { 0% { top: 0%; } 100% { top: 100%; } }
 
         .loader {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -207,7 +229,10 @@
     <!-- AJOUTER -->
     <div id="page-add" class="page">
         <div id="scan-ui">
-            <div id="video-container"><video id="video" playsinline muted></video></div>
+            <div id="video-container">
+                <video id="video" playsinline muted></video>
+                <div id="scan-overlay"><div id="scan-frame"><div id="scan-line"></div></div></div>
+            </div>
             <button class="btn" id="start-scan-btn" onclick="startScan()">📷 Scanner un code</button>
             <button class="btn" style="background:var(--glass-bg); color:var(--text-main); border: 1px solid var(--glass-border);" onclick="manualAdd()">✏️ Saisie manuelle</button>
             <button class="btn" style="background:transparent; color:var(--accent);" onclick="toggleLocationManager()">⚙️ Gérer les tiroirs</button>
@@ -253,7 +278,14 @@
         let tempProd = null;
         let isScanning = false;
         let longPressTimer;
-        const reader = new ZXing.BrowserMultiFormatReader();
+        const hints = new Map();
+        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+            ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
+            ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E,
+            ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.QR_CODE
+        ]);
+        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+        const reader = new ZXing.BrowserMultiFormatReader(hints, 300);
 
         function loadLocations() {
             const saved = localStorage.getItem('freezer_locations');
@@ -403,17 +435,23 @@
             if (success) loadInventory();
         }
 
-        function stopScan() { reader.reset(); isScanning = false; document.getElementById('start-scan-btn').style.display = 'block'; }
+        function stopScan() { reader.reset(); isScanning = false; document.getElementById('start-scan-btn').style.display = 'block'; document.getElementById('scan-overlay').classList.remove('active'); }
 
         async function startScan() {
             isScanning = true;
             document.getElementById('start-scan-btn').style.display = 'none';
             try {
                 const videoDevices = await reader.listVideoInputDevices();
-                const selectedDeviceId = videoDevices.length > 1 ? videoDevices[videoDevices.length - 1].deviceId : undefined;
+                let selectedDeviceId;
+                if (videoDevices.length > 1) {
+                    const rearCam = videoDevices.find(d => /back|rear|environment/i.test(d.label));
+                    selectedDeviceId = rearCam ? rearCam.deviceId : videoDevices[videoDevices.length - 1].deviceId;
+                }
+                document.getElementById('scan-overlay').classList.add('active');
                 await reader.decodeFromVideoDevice(selectedDeviceId, 'video', async (res) => {
                     if (res && isScanning) {
                         stopScan();
+                        if (navigator.vibrate) navigator.vibrate(80);
                         showLoader(true);
                         const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${res.text}.json`);
                         const d = await r.json();
@@ -422,7 +460,8 @@
                             tempProd = { name: d.product.product_name || "Sans nom", brand: d.product.brands || "-", image: d.product.image_front_small_url || "", barcode: d.product.code };
                             showPreview();
                         } else {
-                            showError("Produit non reconnu."); cancelAdd();
+                            showError("Produit non reconnu, réessayez.");
+                            setTimeout(() => { if (!isScanning) startScan(); }, 2000);
                         }
                     }
                 });
