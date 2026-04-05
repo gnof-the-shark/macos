@@ -3,58 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Congélo Stock - Liquid Glass</title>
-    <script src="./zxing-library.min.js"></script>
+    <title>Congélo Stock - Photo & Sync</title>
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
     <style>
         :root {
             --primary: #34C759;
             --accent: #007AFF;
             --danger: #FF3B30;
-            /* Liquid Glass Palette */
-            --glass-bg: rgba(255, 255, 255, 0.7);
+            --glass-bg: rgba(255, 255, 255, 0.75);
             --glass-border: rgba(255, 255, 255, 0.4);
             --text-main: #1d1d1f;
             --text-sub: #86868b;
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
             background: #f5f5f7;
-            margin: 0;
-            padding-bottom: 100px;
+            margin: 0; padding-bottom: 100px;
             color: var(--text-main);
             overflow-x: hidden;
             -webkit-tap-highlight-color: transparent;
-            user-select: none;
         }
 
-        /* Arrière-plan Liquide Animé */
         .liquid-bg {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            z-index: -1;
-            background: linear-gradient(120deg, #e0c3fc 0%, #8ec5fc 100%);
-            overflow: hidden;
-        }
-
-        .blob {
-            position: absolute;
-            width: 300px; height: 300px;
-            background: rgba(52, 199, 89, 0.3);
-            filter: blur(80px);
-            border-radius: 50%;
-            animation: move 20s infinite alternate;
-        }
-        .blob-2 {
-            top: 40%; left: 60%;
-            background: rgba(0, 122, 255, 0.2);
-            width: 400px; height: 400px;
-            animation-duration: 25s;
-        }
-
-        @keyframes move {
-            from { transform: translate(-10%, -10%); }
-            to { transform: translate(20%, 30%); }
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            z-index: -1; background: linear-gradient(120deg, #e0c3fc 0%, #8ec5fc 100%);
         }
 
         header {
@@ -64,160 +37,110 @@
             -webkit-backdrop-filter: blur(30px) saturate(180%);
             position: sticky; top: 0; z-index: 100;
             border-bottom: 0.5px solid var(--glass-border);
-            text-align: left;
+            display: flex; justify-content: space-between; align-items: center;
         }
 
-        h1 { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.8px; }
+        .sync-indicator {
+            width: 12px; height: 12px; border-radius: 50%;
+            background: #34C759; transition: all 0.3s;
+        }
+        .sync-pending { 
+            background: #FF9500; 
+            animation: pulse 1s infinite; 
+        }
+        @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.1); } }
 
-        .page { display: none; padding: 15px; animation: iosSlide 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        .page { display: none; padding: 15px; animation: fadeIn 0.3s ease; }
         .active { display: block; }
-        
-        @keyframes iosSlide { 
-            from { opacity: 0; transform: scale(0.95) translateY(15px); } 
-            to { opacity: 1; transform: scale(1) translateY(0); } 
-        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* Search Bar Glass */
         .search-container {
             background: var(--glass-bg);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
             border: 1px solid var(--glass-border);
-            border-radius: 12px;
-            padding: 10px 15px;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
+            border-radius: 12px; padding: 10px 15px; margin-bottom: 20px;
+            display: flex; align-items: center;
         }
+        .search-container input { background: none; border: none; margin-left: 10px; width: 100%; outline: none; font-size: 17px; }
 
-        .search-container input {
-            background: none; border: none; margin-left: 10px; width: 100%; 
-            outline: none; font-size: 17px; color: var(--text-main);
-        }
-
-        /* Card Liquid Glass */
         .card {
             background: var(--glass-bg);
-            backdrop-filter: blur(20px) saturate(150%);
-            -webkit-backdrop-filter: blur(20px) saturate(150%);
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
             border: 1px solid var(--glass-border);
-            border-radius: 22px;
-            padding: 14px; margin-bottom: 14px;
-            display: flex; align-items: center;
-            transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        }
-        .card:active { transform: scale(0.96); background: rgba(255,255,255,0.5); }
-
-        .item-img { width: 56px; height: 56px; border-radius: 14px; object-fit: cover; background: #eee; }
-        .item-info { flex: 1; margin: 0 12px; }
-        .item-info strong { display: block; font-size: 16px; font-weight: 600; margin-bottom: 2px; }
-        .item-info span { font-size: 12px; color: var(--text-sub); text-transform: uppercase; letter-spacing: 0.5px; }
-
-        /* Qty Control Glass */
-        .qty-ctrl { 
-            display: flex; align-items: center; gap: 8px; 
-            background: rgba(0, 0, 0, 0.04); padding: 5px; border-radius: 40px; 
-        }
-        .btn-circle {
-            width: 32px; height: 32px; border-radius: 50%; border: none;
-            background: white; color: var(--text-main); font-size: 20px; 
-            cursor: pointer; display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            border-radius: 20px; padding: 14px; margin-bottom: 12px;
+            display: flex; align-items: center; position: relative;
         }
 
-        .qty-display {
-            min-width: 28px; text-align: center; font-size: 16px; font-weight: 600;
+        .fav-btn {
+            position: absolute; top: 8px; right: 8px;
+            background: none; border: none; font-size: 24px;
+            color: #d1d1d6; z-index: 10; cursor: pointer; padding: 4px;
         }
+        .fav-btn.active { color: #FFCC00; }
 
-        /* Navigation Glass */
+        .item-img { width: 55px; height: 55px; border-radius: 12px; object-fit: cover; background: #eee; }
+        .item-info { flex: 1; margin: 0 12px; overflow: hidden; }
+        .item-info strong { display: block; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .item-subtext { font-size: 12px; color: var(--text-sub); display: block; }
+
+        .qty-ctrl { display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.05); padding: 5px 12px; border-radius: 20px; }
+        .btn-circle { width: 28px; height: 28px; border-radius: 50%; border: none; background: white; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
         nav {
             position: fixed; bottom: 0; width: 100%; 
-            background: rgba(255, 255, 255, 0.6);
-            backdrop-filter: blur(30px) saturate(180%);
-            -webkit-backdrop-filter: blur(30px) saturate(180%);
+            background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(30px);
             display: flex; border-top: 0.5px solid var(--glass-border);
-            padding-bottom: env(safe-area-inset-bottom);
+            padding-bottom: env(safe-area-inset-bottom); z-index: 1000;
         }
-        nav button {
-            flex: 1; padding: 12px 0; border: none; background: none;
-            font-size: 10px; color: #8e8e93; display: flex; flex-direction: column; align-items: center; gap: 4px;
-        }
+        nav button { flex: 1; padding: 15px 0; border: none; background: none; font-size: 10px; color: #8e8e93; display: flex; flex-direction: column; align-items: center; gap: 4px; }
         nav button.active { color: var(--accent); }
-        nav button i { font-style: normal; font-size: 22px; }
 
-        /* Buttons & Forms */
-        .btn {
-            background: var(--accent); color: white; border: none; padding: 18px;
-            border-radius: 16px; width: 100%; font-size: 17px; font-weight: 600; 
-            margin-top: 10px; cursor: pointer;
-        }
+        .btn { background: var(--accent); color: white; border: none; padding: 16px; border-radius: 16px; width: 100%; font-size: 17px; font-weight: 600; margin-top: 10px; cursor: pointer; }
         
-        #video-container { 
-            width: 100%; border-radius: 24px; overflow: hidden; 
-            background: #000; box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            position: relative; aspect-ratio: 4/3;
-        }
-        video { width: 100%; height: 100%; display: block; object-fit: cover; }
-
-        #scan-overlay {
-            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-            display: none; align-items: center; justify-content: center;
-            pointer-events: none;
-        }
-        #scan-overlay.active { display: flex; }
-        #scan-frame {
-            width: 65%; aspect-ratio: 1;
-            border: 2px solid rgba(255,255,255,0.85);
-            border-radius: 16px;
-            box-shadow: 0 0 0 4000px rgba(0,0,0,0.38);
-            position: relative; overflow: hidden;
-        }
-        #scan-line {
-            position: absolute; top: 0; left: 0; right: 0;
-            height: 2px; background: var(--primary);
-            box-shadow: 0 0 8px var(--primary), 0 0 16px var(--primary);
-            animation: scanLine 1.8s ease-in-out infinite;
-        }
-        @keyframes scanLine { 0% { top: 0%; } 100% { top: 100%; } }
-
-        .loader {
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(255,255,255,0.4); backdrop-filter: blur(10px);
-            display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 2000;
-        }
-        .spinner { width: 35px; height: 35px; border: 3px solid rgba(0,0,0,0.1); border-top: 3px solid var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
+        .loader { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.5); backdrop-filter: blur(10px); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 3000; }
+        .spinner { width: 30px; height: 30px; border: 3px solid #eee; border-top: 3px solid var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
         @keyframes spin { 100% { transform: rotate(360deg); } }
 
-        select, input[type="number"] {
-            width: 100%; padding: 16px; border-radius: 14px; 
-            border: 1px solid var(--glass-border); font-size: 17px; background: rgba(255,255,255,0.5);
-            -webkit-appearance: none;
+        .modal-overlay { position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; z-index: 2000; padding: 20px; }
+        .modal-content { background: white; border-radius: 24px; padding: 25px; width: 100%; max-width: 300px; text-align: center; }
+
+        .grocery-item { display: flex; align-items: center; gap: 12px; padding: 12px 10px; border-bottom: 0.5px solid rgba(0,0,0,0.05); }
+        .checkbox { width: 24px; height: 24px; border: 2px solid var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer; }
+        .checkbox.checked { background: var(--accent); }
+        .checkbox.checked::after { content: '✓'; color: white; font-size: 16px; font-weight: bold; }
+        .strikethrough { text-decoration: line-through; color: var(--text-sub); }
+
+        #photo-input { display: none; }
+        .photo-trigger { 
+            background: var(--glass-bg); border: 1px dashed var(--accent); 
+            border-radius: 15px; padding: 15px; margin-bottom: 15px; 
+            display: flex; flex-direction: column; align-items: center; cursor: pointer;
         }
 
-        .location-tag {
-            background: white; padding: 8px 12px; border-radius: 10px; font-size: 14px;
-            display: flex; align-items: center; gap: 8px; margin: 4px; border: 0.5px solid #eee;
+        input[type="text"], input[type="number"], select {
+            width: 100%; padding: 12px; margin-bottom: 15px; border-radius: 10px; border: 1px solid #ddd; font-size: 16px; box-sizing: border-box;
         }
     </style>
 </head>
 <body>
 
-    <div class="liquid-bg">
-        <div class="blob"></div>
-        <div class="blob blob-2"></div>
-    </div>
+    <div class="liquid-bg"></div>
+    <div id="loader" class="loader"><div class="spinner"></div></div>
 
-    <div id="loader" class="loader">
-        <div class="spinner"></div>
+    <div id="grocery-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 style="margin-top:0">Stock épuisé !</h3>
+            <p id="modal-text">Ajouter à l'épicerie ?</p>
+            <button class="btn" onclick="confirmGroceryAdd(true)">🛒 Oui, ajouter</button>
+            <button class="btn" style="background:transparent; color:var(--danger);" onclick="confirmGroceryAdd(false)">Non merci</button>
+        </div>
     </div>
 
     <header>
-        <h1 id="page-title">Mes Stocks</h1>
+        <h1 id="header-title" style="margin:0; font-size: 22px;">Mon Congélo</h1>
+        <div id="sync-dot" class="sync-indicator"></div>
     </header>
 
-    <div id="error-box" style="display:none; background:rgba(255, 59, 48, 0.1); color:var(--danger); padding:15px; margin:15px; border-radius:12px; text-align:center; backdrop-filter:blur(10px);"></div>
-
-    <!-- INVENTAIRE -->
     <div id="page-list" class="page active">
         <div class="search-container">
             <span>🔍</span>
@@ -226,286 +149,352 @@
         <div id="inventory-container">Chargement...</div>
     </div>
 
-    <!-- AJOUTER -->
+    <div id="page-grocery" class="page">
+        <div class="search-container" style="flex-direction: column; gap: 10px;">
+            <div style="display: flex; width: 100%; align-items: center;">
+                <input type="text" id="grocery-input" placeholder="Ajouter un article..." style="flex:1; margin-bottom:0">
+                <input type="number" id="grocery-qty-input" value="1" min="1" style="width: 60px; background: rgba(0,0,0,0.05); border-radius: 8px; padding: 8px; border: none; margin-left: 10px; margin-bottom:0; text-align: center;">
+                <button onclick="addGroceryManual()" style="background:var(--accent); color:white; border:none; padding:8px 15px; border-radius:8px; margin-left:10px; font-weight:bold;">+</button>
+            </div>
+        </div>
+        <div id="grocery-container" style="background:var(--glass-bg); padding:10px; border-radius:20px; border: 1px solid var(--glass-border);">Chargement...</div>
+        <button class="btn" style="background:var(--danger); margin-top:20px;" onclick="clearGroceryList()">🗑️ Vider la liste</button>
+    </div>
+
     <div id="page-add" class="page">
         <div id="scan-ui">
-            <div id="video-container">
-                <video id="video" playsinline muted></video>
-                <div id="scan-overlay"><div id="scan-frame"><div id="scan-line"></div></div></div>
-            </div>
-            <button class="btn" id="start-scan-btn" onclick="startScan()">📷 Scanner un code</button>
-            <button class="btn" style="background:var(--glass-bg); color:var(--text-main); border: 1px solid var(--glass-border);" onclick="manualAdd()">✏️ Saisie manuelle</button>
-            <button class="btn" style="background:transparent; color:var(--accent);" onclick="toggleLocationManager()">⚙️ Gérer les tiroirs</button>
-        </div>
-
-        <div id="location-manager" style="display:none; background:rgba(255,255,255,0.6); padding:20px; border-radius:24px; border:1px solid var(--glass-border); backdrop-filter:blur(20px);">
-            <h3 style="margin-top:0">Tiroirs & Zones</h3>
-            <div id="locations-list" style="display:flex; flex-wrap:wrap; margin-bottom:20px;"></div>
-            <div style="display:flex; gap:10px;">
-                <input type="text" id="new-location-input" placeholder="Nouveau..." style="flex:1; padding:12px; border-radius:12px; border:1px solid var(--glass-border);">
-                <button onclick="addLocation()" style="background:var(--primary); color:white; border:none; padding:0 20px; border-radius:12px; font-weight:bold;">+</button>
-            </div>
-            <button class="btn" style="background:rgba(0,0,0,0.05); color:var(--text-main); margin-top:20px" onclick="toggleLocationManager()">Retour</button>
+            <video id="video" playsinline style="width:100%; border-radius:20px; background:#000; margin-bottom: 10px;"></video>
+            <button class="btn" id="start-scan-btn" onclick="startScan()">📷 Scanner Barcode</button>
+            <button class="btn" style="background:var(--glass-bg); color:var(--text-main);" onclick="manualAdd()">✏️ Saisie manuelle</button>
         </div>
         
         <div id="preview-ui" style="display:none; text-align:center;">
-            <div id="prod-info" style="margin-bottom:25px;"></div>
-            <div style="background:rgba(255,255,255,0.4); padding:20px; border-radius:22px; border:1px solid var(--glass-border);">
-                <div style="text-align:left; margin-bottom:15px;">
-                    <label style="font-weight:600; font-size:14px; color:var(--text-sub);">QUANTITÉ</label>
-                    <input type="number" id="prod-qty" value="1" min="1">
-                </div>
-                <div style="text-align:left; margin-bottom:20px;">
-                    <label style="font-weight:600; font-size:14px; color:var(--text-sub);">EMPLACEMENT</label>
-                    <select id="prod-cat"></select>
-                </div>
-                <button class="btn" id="confirm-btn" onclick="confirmAdd()">💾 Enregistrer</button>
+            <input type="file" id="photo-input" accept="image/*" capture="environment" onchange="handlePhoto(event)">
+            <div class="photo-trigger" onclick="document.getElementById('photo-input').click()">
+                <img id="item-preview-img" style="width:120px; height:120px; border-radius:15px; object-fit:cover; margin-bottom:10px; display:none;">
+                <div id="photo-placeholder">📸 Cliquer pour prendre une photo</div>
+            </div>
+
+            <h2 id="editable-name" contenteditable="true" style="outline:none; margin-bottom:5px; background: rgba(255,255,255,0.5); border-radius: 8px; padding: 5px;">Nom de l'article</h2>
+            <p id="editable-brand" contenteditable="true" style="color:var(--text-sub); outline:none; background: rgba(255,255,255,0.3); border-radius: 8px; padding: 3px;">Marque</p>
+            
+            <div style="background:var(--glass-bg); padding:20px; border-radius:20px; text-align:left; margin-top: 20px;">
+                <label style="font-size:12px; color:var(--text-sub);">QUANTITÉ</label>
+                <input type="number" id="prod-qty" value="1">
+                
+                <label style="font-size:12px; color:var(--text-sub);">EMPLACEMENT</label>
+                <input type="text" id="prod-cat" placeholder="Ex: Tiroir 1, Porte...">
+                
+                <button class="btn" onclick="confirmAdd()">💾 Enregistrer</button>
                 <button class="btn" style="background:transparent; color:var(--text-sub);" onclick="cancelAdd()">Annuler</button>
             </div>
         </div>
     </div>
 
     <nav>
-        <button onclick="switchPage('list')" id="nav-list" class="active"><i>📦</i>Stock</button>
-        <button onclick="switchPage('add')" id="nav-add"><i>➕</i>Ajouter</button>
+        <button onclick="switchPage('list')" id="nav-list" class="active">📦 Stock</button>
+        <button onclick="switchPage('grocery')" id="nav-grocery">🛒 Épicerie</button>
+        <button onclick="switchPage('add')" id="nav-add">➕ Ajouter</button>
     </nav>
 
     <script>
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyqnnnL8MvfdvzO2w-5Pnrzl8vtXdhM6TZumOPFib6MyViXwUNICFVPD0AJsFtx/exec";
-        
-        let inventory = [];
-        let locations = ["Tiroir 1", "Tiroir 2", "Porte"];
-        let tempProd = null;
-        let isScanning = false;
-        let longPressTimer;
-        const hints = new Map();
-        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-            ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
-            ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E,
-            ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.QR_CODE
-        ]);
-        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-        const reader = new ZXing.BrowserMultiFormatReader(hints, 300);
-
-        function loadLocations() {
-            const saved = localStorage.getItem('freezer_locations');
-            if(saved) locations = JSON.parse(saved);
-            updateLocationUI();
-        }
-
-        function updateLocationUI() {
-            const list = document.getElementById('locations-list');
-            if (list) list.innerHTML = locations.map((loc, index) => `
-                <div class="location-tag">
-                    ${loc} <button onclick="removeLocation(${index})" style="border:none;background:none;color:var(--danger);font-weight:bold;">✕</button>
-                </div>`).join('');
-            const select = document.getElementById('prod-cat');
-            if (select) select.innerHTML = locations.map(loc => `<option value="${loc}">${loc}</option>`).join('');
-        }
-
-        function toggleLocationManager() {
-            const div = document.getElementById('location-manager');
-            const scanUI = document.getElementById('scan-ui');
-            const isHidden = div.style.display === 'none';
-            div.style.display = isHidden ? 'block' : 'none';
-            scanUI.style.display = isHidden ? 'none' : 'block';
-            if (isScanning) stopScan();
-        }
-
-        function addLocation() {
-            const input = document.getElementById('new-location-input');
-            const val = input.value.trim();
-            if(val && !locations.includes(val)) {
-                locations.push(val);
-                localStorage.setItem('freezer_locations', JSON.stringify(locations));
-                input.value = "";
-                updateLocationUI();
-            }
-        }
-
-        function removeLocation(index) {
-            locations.splice(index, 1);
-            localStorage.setItem('freezer_locations', JSON.stringify(locations));
-            updateLocationUI();
-        }
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyKvsPm-im81d1RJYlmBmpcMSHdjfLOv_436FdLlJue5wRNujsWx-JSZJVpVnY1Bg/exec";
+        let inventory = [], grocery = [];
+        let tempProd = null, isScanning = false, codeReader = null;
+        let syncQueue = JSON.parse(localStorage.getItem('syncQueue') || '[]');
+        let isProcessing = false;
 
         function showLoader(s) { document.getElementById('loader').style.display = s ? 'flex' : 'none'; }
         
-        function showError(msg) {
-            const box = document.getElementById('error-box');
-            box.innerText = msg; box.style.display = msg ? 'block' : 'none';
-            if(msg) setTimeout(() => { box.style.display = 'none'; }, 4000);
+        function updateSyncIndicator() {
+            const dot = document.getElementById('sync-dot');
+            dot.className = syncQueue.length > 0 ? 'sync-indicator sync-pending' : 'sync-indicator';
         }
 
-        async function callServer(payload) {
-            showLoader(true);
+        async function queueAction(payload) {
+            syncQueue.push(payload);
+            localStorage.setItem('syncQueue', JSON.stringify(syncQueue));
+            updateSyncIndicator();
+            if (!isProcessing) processQueue();
+        }
+
+        async function processQueue() {
+            if (syncQueue.length === 0) { isProcessing = false; return; }
+            isProcessing = true;
+            const payload = syncQueue[0];
             try {
-                payload.source = "app";
-                await fetch(SCRIPT_URL, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    cache: 'no-cache',
-                    body: JSON.stringify(payload)
+                await fetch(SCRIPT_URL, { 
+                    method: 'POST', mode: 'no-cors', 
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload) 
                 });
-                await new Promise(r => setTimeout(r, 2000));
-                showLoader(false);
-                return true;
-            } catch (e) {
-                showLoader(false);
-                showError("Erreur serveur.");
-                return false;
+                syncQueue.shift();
+                localStorage.setItem('syncQueue', JSON.stringify(syncQueue));
+                updateSyncIndicator();
+                processQueue();
+            } catch (e) { 
+                console.error("Erreur sync:", e);
+                isProcessing = false; 
             }
         }
 
-        async function getData(target) {
-            showLoader(true);
-            try {
-                const response = await fetch(`${SCRIPT_URL}?target=${target}&source=app`);
-                const data = await response.json();
-                showLoader(false);
-                return data;
-            } catch (e) {
-                showLoader(false);
-                return null;
-            }
-        }
-
-        function switchPage(p) {
+        async function switchPage(p) {
             document.querySelectorAll('.page').forEach(pg => pg.classList.remove('active'));
             document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
             document.getElementById('page-' + p).classList.add('active');
             document.getElementById('nav-' + p).classList.add('active');
-            stopScan();
             if(p === 'list') loadInventory();
-            if(p === 'add') cancelAdd();
+            if(p === 'grocery') loadGrocery();
+            if(p !== 'add') stopScan();
         }
 
         async function loadInventory() {
-            const data = await getData("inventory");
-            if (data) { inventory = data; renderInventory(); }
+            showLoader(true);
+            try {
+                const r = await fetch(`${SCRIPT_URL}?target=inventory&t=${Date.now()}`);
+                inventory = await r.json();
+                renderInventory();
+            } catch(e) { console.error(e); } finally { showLoader(false); }
         }
 
         function renderInventory() {
             const q = document.getElementById('search').value.toLowerCase();
             const container = document.getElementById('inventory-container');
-            const items = inventory.filter(i => (i.nom && i.nom.toLowerCase().includes(q)) || (i.categorie && i.categorie.toLowerCase().includes(q)));
             
-            if(items.length === 0) {
-                container.innerHTML = "<div style='text-align:center; padding:40px; color:var(--text-sub);'><p>Vide</p></div>";
-                return;
-            }
-
-            container.innerHTML = items.map(i => `
+            let filtered = inventory.filter(i => (i.nom || "").toLowerCase().includes(q));
+            
+            filtered.sort((a, b) => {
+                const favA = a.favoris === true || String(a.favoris).toLowerCase() === "true";
+                const favB = b.favoris === true || String(b.favoris).toLowerCase() === "true";
+                if (favA && !favB) return -1;
+                if (!favA && favB) return 1;
+                return 0;
+            });
+            
+            container.innerHTML = filtered.map(i => {
+                const bc = String(i.barcode);
+                const isFav = i.favoris === true || String(i.favoris).toLowerCase() === "true";
+                return `
                 <div class="card">
+                    <button class="fav-btn ${isFav ? 'active' : ''}" onclick="toggleFav('${bc}', ${!isFav})">★</button>
                     <img src="${i.image}" class="item-img" onerror="this.src='https://placehold.co/100x100?text=?'">
                     <div class="item-info">
                         <strong>${i.nom}</strong>
-                        <span>${i.categorie}</span>
+                        <span class="item-subtext">${i.marque || '-'} • <small>${i.emplacement || 'Tiroir ?'}</small></span>
                     </div>
                     <div class="qty-ctrl">
-                        <button class="btn-circle" onclick="updateStock('${i.barcode}', ${parseInt(i.quantite) - 1})">−</button>
-                        <div class="qty-display" 
-                             onmousedown="startLongPress('${i.barcode}', ${i.quantite})" 
-                             onmouseup="cancelLongPress()" 
-                             onmouseleave="cancelLongPress()"
-                             ontouchstart="startLongPress('${i.barcode}', ${i.quantite})"
-                             ontouchend="cancelLongPress()">
-                             ${i.quantite}
-                        </div>
-                        <button class="btn-circle" onclick="updateStock('${i.barcode}', ${parseInt(i.quantite) + 1})">+</button>
+                        <button class="btn-circle" onclick="updateQty('${bc}', ${parseInt(i.quantite)-1}, '${(i.nom||"").replace(/'/g," ")}')">−</button>
+                        <div style="font-weight:600">${i.quantite}</div>
+                        <button class="btn-circle" onclick="updateQty('${bc}', ${parseInt(i.quantite)+1})">+</button>
                     </div>
-                </div>`).join('');
+                </div>`;
+            }).join('') || "<p style='text-align:center;color:gray;padding:20px;'>Aucun article</p>";
         }
 
-        function startLongPress(barcode, currentQty) {
-            longPressTimer = setTimeout(() => {
-                const newQty = prompt(`Nouvelle quantité (Actuel: ${currentQty}) :`, currentQty);
-                if (newQty !== null) {
-                    const parsed = parseInt(newQty);
-                    if (!isNaN(parsed) && parsed >= 0) updateStock(barcode, parsed);
-                }
-            }, 700);
+        function toggleFav(bc, fav) {
+            const idx = inventory.findIndex(i => String(i.barcode) === bc);
+            if(idx > -1) { 
+                inventory[idx].favoris = fav; 
+                renderInventory(); 
+            }
+            queueAction({ action: "update", barcode: bc, favori: fav, target: "inventory" });
         }
 
-        function cancelLongPress() { clearTimeout(longPressTimer); }
-
-        async function updateStock(bc, nq) {
-            const action = nq < 1 ? "delete" : "update";
-            const success = await callServer({ action, barcode: bc, quantity: nq, target: "inventory" });
-            if (success) loadInventory();
+        function updateQty(bc, nq, name) {
+            const idx = inventory.findIndex(i => String(i.barcode) === bc);
+            if (idx === -1) return;
+            if (nq <= 0) {
+                tempProd = { barcode: bc, name: name };
+                document.getElementById('modal-text').innerText = `Ajouter "${name}" à l'épicerie ?`;
+                document.getElementById('grocery-modal').style.display = 'flex';
+                return;
+            }
+            inventory[idx].quantite = nq;
+            renderInventory();
+            queueAction({ action: "update", barcode: bc, quantity: nq, target: "inventory" });
         }
 
-        function stopScan() { reader.reset(); isScanning = false; document.getElementById('start-scan-btn').style.display = 'block'; document.getElementById('scan-overlay').classList.remove('active'); }
+        async function confirmGroceryAdd(add) {
+            document.getElementById('grocery-modal').style.display = 'none';
+            if (add) queueAction({ action: "add", name: tempProd.name, quantity: 1, target: "grocery" });
+            queueAction({ action: "delete", barcode: tempProd.barcode, target: "inventory" });
+            inventory = inventory.filter(i => String(i.barcode) !== String(tempProd.barcode));
+            renderInventory();
+        }
+
+        async function loadGrocery() {
+            showLoader(true);
+            try {
+                const r = await fetch(`${SCRIPT_URL}?target=grocery&t=${Date.now()}`);
+                grocery = await r.json();
+                renderGrocery();
+            } catch(e) { console.error(e); } finally { showLoader(false); }
+        }
+
+        function renderGrocery() {
+            const container = document.getElementById('grocery-container');
+            container.innerHTML = grocery.map(i => {
+                const name = i["nom"] || "Inconnu";
+                const qty = parseInt(i["quantite"] || 1);
+                const isChecked = i["coche"] === true || String(i["coche"]).toLowerCase() === "true";
+                const safeName = name.replace(/'/g, " ");
+                
+                return `
+                <div class="grocery-item">
+                    <div class="checkbox ${isChecked ? 'checked' : ''}" onclick="toggleGrocery('${safeName}', ${!isChecked})"></div>
+                    <div style="flex:1; font-weight:500;" class="${isChecked ? 'strikethrough' : ''}" onclick="toggleGrocery('${safeName}', ${!isChecked})">${name}</div>
+                    <div class="qty-ctrl" style="background: rgba(0,0,0,0.03); padding: 2px 8px; gap: 8px;">
+                        <button class="btn-circle" style="width:24px; height:24px; font-size:12px;" onclick="updateGroceryQty('${safeName}', ${qty - 1})">−</button>
+                        <div style="font-size:14px; min-width:15px; text-align:center; font-weight:bold">${qty}</div>
+                        <button class="btn-circle" style="width:24px; height:24px; font-size:12px;" onclick="updateGroceryQty('${safeName}', ${qty + 1})">+</button>
+                    </div>
+                    <button style="border:none;background:none;color:var(--danger); padding: 5px; font-size:18px; margin-left:5px;" onclick="deleteGrocery('${safeName}')">✕</button>
+                </div>`;
+            }).join('') || "<p style='text-align:center;color:gray;padding:20px;'>Liste vide</p>";
+        }
+
+        function toggleGrocery(name, checked) {
+            queueAction({ action: "updateGrocery", name: name, checked: checked, target: "grocery" });
+            const idx = grocery.findIndex(i => (i["nom"] || "").toLowerCase() === name.toLowerCase());
+            if(idx > -1) { 
+                grocery[idx]["coche"] = checked; 
+                renderGrocery(); 
+            }
+        }
+
+        function updateGroceryQty(name, nq) {
+            if (nq <= 0) return deleteGrocery(name);
+            queueAction({ action: "updateGrocery", name: name, quantity: nq, target: "grocery" });
+            const idx = grocery.findIndex(i => (i["nom"] || "").toLowerCase() === name.toLowerCase());
+            if(idx > -1) {
+                grocery[idx]["quantite"] = nq;
+                renderGrocery();
+            }
+        }
+
+        function deleteGrocery(name) {
+            if(!confirm(`Supprimer "${name}" ?`)) return;
+            queueAction({ action: "delete", name: name, target: "grocery" });
+            grocery = grocery.filter(i => (i["nom"] || "").toLowerCase() !== name.toLowerCase());
+            renderGrocery();
+        }
+
+        function addGroceryManual() {
+            const val = document.getElementById('grocery-input').value.trim();
+            const qty = parseInt(document.getElementById('grocery-qty-input').value) || 1;
+            if(!val) return;
+            queueAction({ action: "add", name: val, quantity: qty, target: "grocery" });
+            const existingIdx = grocery.findIndex(i => (i["nom"] || "").toLowerCase() === val.toLowerCase());
+            if(existingIdx > -1) {
+                const current = parseInt(grocery[existingIdx]["quantite"] || 0);
+                grocery[existingIdx]["quantite"] = current + qty;
+            } else {
+                grocery.push({ "nom": val, "quantite": qty, "coche": false });
+            }
+            renderGrocery();
+            document.getElementById('grocery-input').value = "";
+            document.getElementById('grocery-qty-input').value = "1";
+        }
+
+        function clearGroceryList() {
+            if(confirm("Voulez-vous vraiment vider toute la liste d'épicerie ?")) {
+                grocery = []; 
+                renderGrocery();
+                queueAction({ action: "clearGrocery", target: "grocery" });
+            }
+        }
+
+        function handlePhoto(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = e.target.result;
+                tempProd.image = img;
+                const previewImg = document.getElementById('item-preview-img');
+                previewImg.src = img;
+                previewImg.style.display = 'block';
+                document.getElementById('photo-placeholder').style.display = 'none';
+            };
+            reader.readAsDataURL(file);
+        }
 
         async function startScan() {
+            if (!codeReader) codeReader = new ZXing.BrowserMultiFormatReader();
             isScanning = true;
             document.getElementById('start-scan-btn').style.display = 'none';
             try {
-                const videoDevices = await reader.listVideoInputDevices();
-                let selectedDeviceId;
-                if (videoDevices.length > 0) {
-                    const rearCam = videoDevices.find(d => /back|rear|environment/i.test(d.label));
-                    selectedDeviceId = rearCam ? rearCam.deviceId : videoDevices[videoDevices.length - 1].deviceId;
-                }
-                document.getElementById('scan-overlay').classList.add('active');
-                await reader.decodeFromVideoDevice(selectedDeviceId, 'video', async (res) => {
-                    if (res && isScanning) {
-                        stopScan();
-                        if (navigator.vibrate) navigator.vibrate(80);
-                        showLoader(true);
-                        try {
-                            const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${res.text}.json`);
-                            const d = await r.json();
-                            showLoader(false);
-                            if(d.status === 1) {
-                                tempProd = { name: d.product.product_name || "Sans nom", brand: d.product.brands || "-", image: d.product.image_front_small_url || "", barcode: d.product.code };
-                                showPreview();
-                            } else {
-                                showError("Produit non reconnu, réessayez.");
-                                setTimeout(() => { if (!isScanning) startScan(); }, 2000);
-                            }
-                        } catch (fetchErr) {
-                            showLoader(false);
-                            showError("Erreur réseau, réessayez.");
-                            setTimeout(() => { if (!isScanning) startScan(); }, 2000);
-                        }
-                    }
+                const devices = await codeReader.listVideoInputDevices();
+                const id = devices.length > 1 ? devices[devices.length-1].deviceId : devices[0].deviceId;
+                codeReader.decodeFromVideoDevice(id, 'video', (res) => {
+                    if (res && isScanning) { isScanning = false; codeReader.reset(); processBarcode(res.text); }
                 });
-            } catch (err) { stopScan(); showError("Impossible d'accéder à la caméra : " + (err.message || err)); }
+            } catch (e) { stopScan(); }
         }
 
-        function manualAdd() {
-            const n = prompt("Nom du produit :");
-            if(!n) return;
-            tempProd = { name: n, brand: "Saisie manuelle", image: "", barcode: "M-" + Date.now() };
-            updateLocationUI();
-            showPreview();
+        function stopScan() { if(codeReader) codeReader.reset(); isScanning = false; document.getElementById('start-scan-btn').style.display = 'block'; }
+
+        async function processBarcode(bc) {
+            showLoader(true);
+            try {
+                const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${bc}.json`);
+                const d = await r.json();
+                tempProd = { 
+                    barcode: bc, 
+                    name: d.status === 1 ? (d.product.product_name || "Produit inconnu") : "Nouveau", 
+                    brand: d.status === 1 ? (d.product.brands || "-") : "-",
+                    image: d.status === 1 ? d.product.image_front_small_url : "" 
+                };
+                showPreview();
+            } catch(e) { tempProd = { barcode: bc, name: "Article", brand: "Marque", image: "" }; showPreview(); } finally { showLoader(false); }
         }
 
         function showPreview() {
             document.getElementById('scan-ui').style.display = 'none';
             document.getElementById('preview-ui').style.display = 'block';
-            document.getElementById('prod-qty').value = 1;
-            document.getElementById('prod-info').innerHTML = `
-                <img src="${tempProd.image}" style="width:100px; height:100px; border-radius:20px; object-fit:cover; margin-bottom:15px;" onerror="this.src='https://placehold.co/150x150?text=Produit'">
-                <h2 style="margin:0; font-size:22px;">${tempProd.name}</h2>
-            `;
+            const previewImg = document.getElementById('item-preview-img');
+            if (tempProd.image) {
+                previewImg.src = tempProd.image;
+                previewImg.style.display = 'block';
+                document.getElementById('photo-placeholder').style.display = 'none';
+            } else {
+                previewImg.style.display = 'none';
+                document.getElementById('photo-placeholder').style.display = 'block';
+            }
+            document.getElementById('editable-name').innerText = tempProd.name;
+            document.getElementById('editable-brand').innerText = tempProd.brand;
         }
 
-        function cancelAdd() { stopScan(); document.getElementById('preview-ui').style.display = 'none'; document.getElementById('scan-ui').style.display = 'block'; tempProd = null; }
-
-        async function confirmAdd() {
-            if (!tempProd) return;
-            const cat = document.getElementById('prod-cat').value;
-            const qty = parseInt(document.getElementById('prod-qty').value) || 1;
-            const btn = document.getElementById('confirm-btn');
-            btn.disabled = true;
-            const success = await callServer({ action: "add", target: "inventory", barcode: tempProd.barcode, name: tempProd.name, brand: tempProd.brand, image: tempProd.image, quantity: qty, category: cat });
-            if (success) switchPage('list'); else btn.disabled = false;
+        function confirmAdd() {
+            const payload = {
+                action: "add", target: "inventory", barcode: tempProd.barcode,
+                name: document.getElementById('editable-name').innerText,
+                brand: document.getElementById('editable-brand').innerText,
+                image: tempProd.image || "",
+                quantity: parseInt(document.getElementById('prod-qty').value),
+                category: document.getElementById('prod-cat').value
+            };
+            queueAction(payload);
+            setTimeout(() => switchPage('list'), 500);
+            cancelAdd();
         }
 
-        window.onload = () => { loadLocations(); loadInventory(); };
+        function manualAdd() { 
+            tempProd = { barcode: "M-"+Date.now(), name: "Article", brand: "Marque", image: "" }; 
+            showPreview(); 
+        }
+
+        function cancelAdd() { 
+            document.getElementById('preview-ui').style.display = 'none'; 
+            document.getElementById('scan-ui').style.display = 'block'; 
+            stopScan(); 
+            document.getElementById('item-preview-img').style.display = 'none';
+            document.getElementById('photo-placeholder').style.display = 'block';
+            document.getElementById('photo-input').value = "";
+            document.getElementById('prod-cat').value = "";
+        }
+
+        window.onload = () => { loadInventory(); updateSyncIndicator(); };
     </script>
 </body>
 </html>
-
