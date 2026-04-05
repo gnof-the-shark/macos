@@ -443,7 +443,7 @@
             try {
                 const videoDevices = await reader.listVideoInputDevices();
                 let selectedDeviceId;
-                if (videoDevices.length > 1) {
+                if (videoDevices.length > 0) {
                     const rearCam = videoDevices.find(d => /back|rear|environment/i.test(d.label));
                     selectedDeviceId = rearCam ? rearCam.deviceId : videoDevices[videoDevices.length - 1].deviceId;
                 }
@@ -453,14 +453,20 @@
                         stopScan();
                         if (navigator.vibrate) navigator.vibrate(80);
                         showLoader(true);
-                        const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${res.text}.json`);
-                        const d = await r.json();
-                        showLoader(false);
-                        if(d.status === 1) {
-                            tempProd = { name: d.product.product_name || "Sans nom", brand: d.product.brands || "-", image: d.product.image_front_small_url || "", barcode: d.product.code };
-                            showPreview();
-                        } else {
-                            showError("Produit non reconnu, réessayez.");
+                        try {
+                            const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${res.text}.json`);
+                            const d = await r.json();
+                            showLoader(false);
+                            if(d.status === 1) {
+                                tempProd = { name: d.product.product_name || "Sans nom", brand: d.product.brands || "-", image: d.product.image_front_small_url || "", barcode: d.product.code };
+                                showPreview();
+                            } else {
+                                showError("Produit non reconnu, réessayez.");
+                                setTimeout(() => { if (!isScanning) startScan(); }, 2000);
+                            }
+                        } catch (fetchErr) {
+                            showLoader(false);
+                            showError("Erreur réseau, réessayez.");
                             setTimeout(() => { if (!isScanning) startScan(); }, 2000);
                         }
                     }
