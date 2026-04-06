@@ -416,11 +416,11 @@
             const addProduct = async (product) => {
                 const newProduct = { ...product, id: product.id || Date.now().toString(), addedAt: new Date().toISOString(), action: 'add' };
                 
-                // Bug "nouveau en bas" : On ajoute à la fin de la liste locale pour correspondre au Sheets
+                // On met le nouveau produit en HAUT de la liste pour plus de confort
                 setStock(prev => {
                     const exists = prev.find(p => p.id === newProduct.id);
                     if (exists) return prev.map(p => p.id === newProduct.id ? newProduct : p);
-                    return [...prev, newProduct];
+                    return [newProduct, ...prev];
                 });
                 
                 confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
