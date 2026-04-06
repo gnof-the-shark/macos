@@ -219,7 +219,6 @@
             <span id="sync-status-label" class="sync-status">Sync OK</span>
             <div id="sync-dot" class="sync-indicator sync-ok"></div>
             <button class="sync-btn" onclick="forceSync()">↻</button>
-            <button class="sync-btn" onclick="setSyncScope()">☁️</button>
         </div>
     </header>
 
@@ -297,9 +296,9 @@
         let refreshTimer = null;
         let syncError = null;
 
-        const deviceId = getOrCreatePersistedValue('deviceId', () => `dev-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
+        const SYNC_QUEUE_STORAGE_KEY = 'syncQueue';
+        const deviceId = getOrCreatePersistedValue('deviceId', () => `device-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
         const sessionId = `ses-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-        let syncScope = getOrCreatePersistedValue('syncUserScope', () => 'default');
         syncQueue = loadQueueFromStorage();
 
         function getOrCreatePersistedValue(key, valueFactory) {
@@ -310,12 +309,11 @@
             return value;
         }
 
-        function getQueueStorageKey() { return `syncQueue:${syncScope}`; }
         function loadQueueFromStorage() {
-            try { return JSON.parse(localStorage.getItem(getQueueStorageKey()) || '[]'); } catch { return []; }
+            try { return JSON.parse(localStorage.getItem(SYNC_QUEUE_STORAGE_KEY) || '[]'); } catch { return []; }
         }
         function saveQueueToStorage() {
-            localStorage.setItem(getQueueStorageKey(), JSON.stringify(syncQueue));
+            localStorage.setItem(SYNC_QUEUE_STORAGE_KEY, JSON.stringify(syncQueue));
         }
 
         function showLoader(s) { document.getElementById('loader').style.display = s ? 'flex' : 'none'; }
@@ -333,8 +331,6 @@
 
         function buildApiUrl(extraParams = {}) {
             const u = new URL(SCRIPT_URL);
-            u.searchParams.set('scope', syncScope);
-            u.searchParams.set('deviceId', deviceId);
             Object.entries(extraParams).forEach(([k, v]) => {
                 if (v !== undefined && v !== null && v !== '') u.searchParams.set(k, String(v));
             });
@@ -344,7 +340,6 @@
         function addSyncMetadata(payload) {
             return {
                 ...payload,
-                scope: syncScope,
                 deviceId,
                 sessionId,
                 clientTimestamp: new Date().toISOString()
@@ -413,21 +408,6 @@
             updateSyncIndicator();
             await processQueue();
             await refreshAllData({ silent: true });
-        }
-
-        function setSyncScope() {
-            const next = prompt("Identifiant cloud partagé (même valeur sur tous les appareils)", syncScope);
-            if (next === null) return;
-            const normalized = next.trim().toLowerCase();
-            if (!normalized) { alert("Identifiant invalide."); return; }
-            if (normalized === syncScope) return;
-            syncScope = normalized;
-            localStorage.setItem('syncUserScope', syncScope);
-            syncQueue = loadQueueFromStorage();
-            syncError = null;
-            updateSyncIndicator();
-            refreshAllData({ silent: true });
-            processQueue();
         }
 
         // Navigation
@@ -628,13 +608,17 @@
 
         function confirmAdd() {
             const quantity = parseInt(document.getElementById('prod-qty').value, 10);
+            if (!Number.isFinite(quantity) || quantity <= 0) {
+                alert("Quantité invalide. Veuillez entrer un nombre supérieur à 0.");
+                return;
+            }
             const payload = {
                 action: "add", target: "inventory",
                 barcode: tempProd.barcode,
                 name: document.getElementById('prod-name').value,
                 brand: document.getElementById('prod-brand').value,
                 image: tempProd.image || "",
-                quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
+                quantity: quantity,
                 emplacement: document.getElementById('prod-cat').value,
                 favoris: false
             };
@@ -656,11 +640,10 @@
         // Initialisation
         function startBackgroundRefresh() {
             if (refreshTimer) clearInterval(refreshTimer);
+            if (document.visibilityState !== 'visible') return;
             refreshTimer = setInterval(() => {
-                if (document.visibilityState === 'visible') {
-                    refreshAllData({ silent: true });
-                    processQueue();
-                }
+                refreshAllData({ silent: true });
+                processQueue();
             }, REFRESH_INTERVAL_MS);
         }
 
@@ -681,6 +664,10 @@
             if (document.visibilityState === 'visible') {
                 refreshAllData({ silent: true });
                 processQueue();
+                startBackgroundRefresh();
+            } else if (refreshTimer) {
+                clearInterval(refreshTimer);
+                refreshTimer = null;
             }
         });
     </script>
