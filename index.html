@@ -18,7 +18,7 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <script src="https://unpkg.com/framer-motion@10.16.4/dist/framer-motion.js"></script>
 
@@ -73,7 +73,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
+        const { useState, useEffect, useRef, useCallback } = React;
         const { motion, AnimatePresence } = window.Motion;
 
         // --- Configuration & Constants ---
@@ -85,7 +85,7 @@
         // --- Icons Helper ---
         const Icon = ({ name, className = "w-6 h-6" }) => {
             useEffect(() => {
-                lucide.createIcons();
+                if (window.lucide) lucide.createIcons();
             }, [name]);
             return <i data-lucide={name} className={className}></i>;
         };
@@ -101,7 +101,8 @@
                         name: p.product_name || p.generic_name || 'Produit inconnu',
                         brand: p.brands || '',
                         imageUrl: p.image_url || p.image_front_url,
-                        barcode: barcode
+                        barcode: barcode,
+                        category: mapOFFCategory(p.categories_tags)
                     };
                 }
                 return null;
@@ -111,13 +112,23 @@
             }
         };
 
-        const saveToGoogleSheets = async (product) => {
+        const mapOFFCategory = (tags = []) => {
+            if (!tags) return 'Autres';
+            const tagStr = tags.join(' ').toLowerCase();
+            if (tagStr.includes('meat') || tagStr.includes('viande')) return 'Viandes';
+            if (tagStr.includes('fish') || tagStr.includes('poisson')) return 'Poissons';
+            if (tagStr.includes('veg')) return 'Légumes';
+            if (tagStr.includes('dessert') || tagStr.includes('ice')) return 'Desserts';
+            return 'Autres';
+        };
+
+        const saveToGoogleSheets = async (data, sheet = 'stock') => {
             try {
                 await fetch(SCRIPT_URL, {
                     method: 'POST',
                     mode: 'no-cors',
                     headers: { 'Content-Type': 'text/plain' },
-                    body: JSON.stringify(product),
+                    body: JSON.stringify({ ...data, sheet }),
                 });
                 return true;
             } catch (error) {
@@ -126,9 +137,9 @@
             }
         };
 
-        const fetchFromGoogleSheets = async () => {
+        const fetchFromGoogleSheets = async (sheet = 'stock') => {
             try {
-                const response = await fetch(SCRIPT_URL, {
+                const response = await fetch(`${SCRIPT_URL}?sheet=${sheet}`, {
                     method: 'GET',
                     mode: 'cors',
                     cache: 'no-cache',
@@ -139,12 +150,63 @@
                 return Array.isArray(data) ? data : [];
             } catch (error) {
                 console.error('Fetch Error:', error);
-                throw error;
+                return [];
             }
         };
 
+        // --- Custom Hook for Long Press ---
+        function useLongPress(callback, ms = 600) {
+            const [startLongPress, setStartLongPress] = useState(false);
+            const timerRef = useRef();
+
+            const start = useCallback(() => setStartLongPress(true), []);
+            const stop = useCallback(() => setStartLongPress(false), []);
+
+            useEffect(() => {
+                if (startLongPress) {
+                    timerRef.current = setTimeout(callback, ms);
+                } else {
+                    clearTimeout(timerRef.current);
+                }
+                return () => clearTimeout(timerRef.current);
+            }, [startLongPress, callback, ms]);
+
+            return {
+                onMouseDown: start,
+                onMouseUp: stop,
+                onMouseLeave: stop,
+                onTouchStart: start,
+                onTouchEnd: stop,
+            };
+        }
+
+        const [confirmDialog, setConfirmDialog] = useState(null);
+        const [notification, setNotification] = useState(null);
+
         // --- Components ---
         
+        function Modal({ title, children, onClose }) {
+            return (
+                <motion.div 
+                    initial={{ opacity: 0 }} 
+                    animate={{ opacity: 1 }} 
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6"
+                    onClick={onClose}
+                >
+                    <motion.div 
+                        initial={{ scale: 0.9, y: 20 }}
+                        animate={{ scale: 1, y: 0 }}
+                        className="bg-white rounded-[2rem] p-8 w-full max-w-sm shadow-2xl"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <h3 className="font-headline font-black text-2xl mb-4 text-primary">{title}</h3>
+                        {children}
+                    </motion.div>
+                </motion.div>
+            );
+        }
+
         function NavButton({ active, onClick, iconName, label }) {
             return (
                 <button 
@@ -161,10 +223,15 @@
             );
         }
 
-        function StockCard({ item, onRemove }) {
+        function StockCard({ item, onRemove, onUpdate, onLongPress }) {
             const isExpired = item.expiryDate && new Date(item.expiryDate) < new Date();
+            const longPressProps = useLongPress(() => onLongPress(item));
+
             return (
-                <div className="glass-card rounded-xl p-6 shadow-sm relative overflow-hidden group hover:-translate-y-1 transition-all">
+                <div 
+                    {...longPressProps}
+                    className="glass-card rounded-xl p-6 shadow-sm relative overflow-hidden group transition-all active:scale-[0.98]"
+                >
                     <div className="flex justify-between items-start mb-4">
                         <div className="flex gap-4 items-center">
                             {item.imageUrl ? (
@@ -175,26 +242,76 @@
                                 </div>
                             )}
                             <div>
-                                <h3 className="text-lg font-bold font-headline text-on-surface">{item.name}</h3>
+                                <h3 className="text-lg font-bold font-headline text-on-surface leading-tight">{item.name}</h3>
                                 <div className="flex gap-2 items-center">
                                     <p className="text-on-surface-variant font-label text-[10px] uppercase tracking-wider">{item.category}</p>
                                     {item.brand && <span className="text-[10px] text-primary/60 font-bold">• {item.brand}</span>}
-                                    {item.location && <span className="text-[10px] text-on-surface-variant/40 font-medium italic">({item.location})</span>}
                                 </div>
                             </div>
                         </div>
-                        <button onClick={onRemove} className="text-on-surface-variant/30 hover:text-red-500 transition-colors">
+                        <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="text-on-surface-variant/30 hover:text-red-500 transition-colors p-2">
                             <Icon name="trash-2" className="w-5 h-5" />
                         </button>
                     </div>
-                    <div className="flex justify-between items-end">
-                        <p className="text-on-surface-variant font-label text-sm">Quantité: <span className="font-bold text-primary">{item.quantity} {item.unit}</span></p>
+                    
+                    <div className="flex justify-between items-center bg-white/30 rounded-lg p-2">
+                        <div className="flex items-center gap-3">
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); onUpdate(item.id, -1); }}
+                                className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary active:bg-primary active:text-white transition-colors"
+                            >
+                                <Icon name="minus" className="w-4 h-4" />
+                            </button>
+                            <div className="text-center min-w-[60px]">
+                                <span className="block text-xs text-on-surface-variant uppercase font-bold tracking-tighter">Qté</span>
+                                <span className="font-black text-primary">{item.quantity} {item.unit}</span>
+                            </div>
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); onUpdate(item.id, 1); }}
+                                className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary active:bg-primary active:text-white transition-colors"
+                            >
+                                <Icon name="plus" className="w-4 h-4" />
+                            </button>
+                        </div>
+                        
                         {item.expiryDate && (
-                            <div className={`flex items-center gap-1 font-bold text-[10px] uppercase tracking-tighter ${isExpired ? 'text-red-500' : 'text-on-surface-variant'}`}>
-                                <Icon name="alert-circle" className="w-3 h-3" />
-                                <span>Expire le : {new Date(item.expiryDate).toLocaleDateString('fr-FR')}</span>
+                            <div className={`text-right ${isExpired ? 'text-red-500' : 'text-on-surface-variant'}`}>
+                                <p className="text-[8px] uppercase font-bold">Expiration</p>
+                                <p className="text-[10px] font-black">{new Date(item.expiryDate).toLocaleDateString('fr-FR')}</p>
                             </div>
                         )}
+                    </div>
+                    {item.location && <p className="mt-2 text-[10px] text-on-surface-variant/40 italic">Emplacement: {item.location}</p>}
+                </div>
+            );
+        }
+
+        function GroceryCard({ item, onRemove, onMoveToStock }) {
+            return (
+                <div className="glass-card rounded-xl p-4 shadow-sm flex justify-between items-center group">
+                    <div className="flex gap-4 items-center">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                            <Icon name="shopping-basket" className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-on-surface">{item.name}</h3>
+                            <p className="text-[10px] text-on-surface-variant uppercase font-bold tracking-widest">{item.category}</p>
+                        </div>
+                    </div>
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={onMoveToStock}
+                            className="w-10 h-10 rounded-full bg-green-500/10 text-green-600 flex items-center justify-center hover:bg-green-500 hover:text-white transition-all"
+                            title="Acheté et mis au stock"
+                        >
+                            <Icon name="check" className="w-5 h-5" />
+                        </button>
+                        <button 
+                            onClick={onRemove}
+                            className="w-10 h-10 rounded-full bg-red-500/10 text-red-600 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"
+                        >
+                            <Icon name="x" className="w-5 h-5" />
+                        </button>
                     </div>
                 </div>
             );
@@ -203,53 +320,108 @@
         function App() {
             const [activeTab, setActiveTab] = useState('stock');
             const [stock, setStock] = useState([]);
+            const [grocery, setGrocery] = useState([]);
             const [searchQuery, setSearchQuery] = useState('');
             const [isLoading, setIsLoading] = useState(true);
-            const [syncError, setSyncError] = useState(false);
+            const [editingProduct, setEditingProduct] = useState(null);
+            const [promptItem, setPromptItem] = useState(null);
 
-            const loadData = async () => {
+            const loadAllData = async () => {
                 setIsLoading(true);
                 try {
-                    const sheetsData = await fetchFromGoogleSheets();
-                    if (sheetsData && sheetsData.length > 0) {
-                        setStock(sheetsData);
-                        setSyncError(false);
-                    } else {
+                    const [stockData, groceryData] = await Promise.all([
+                        fetchFromGoogleSheets('stock'),
+                        fetchFromGoogleSheets('epicerie')
+                    ]);
+                    
+                    if (stockData.length > 0) setStock(stockData);
+                    else {
                         const local = localStorage.getItem('congelo_stock');
                         if (local) setStock(JSON.parse(local));
                     }
+
+                    if (groceryData.length > 0) setGrocery(groceryData);
+                    else {
+                        const localG = localStorage.getItem('congelo_grocery');
+                        if (localG) setGrocery(JSON.parse(localG));
+                    }
                 } catch (err) {
-                    setSyncError(true);
-                    const local = localStorage.getItem('congelo_stock');
-                    if (local) setStock(JSON.parse(local));
+                    console.error("Load error", err);
                 } finally {
                     setIsLoading(false);
                 }
             };
 
-            useEffect(() => {
-                loadData();
-            }, []);
+            useEffect(() => { loadAllData(); }, []);
 
             useEffect(() => {
                 localStorage.setItem('congelo_stock', JSON.stringify(stock));
-            }, [stock]);
+                localStorage.setItem('congelo_grocery', JSON.stringify(grocery));
+            }, [stock, grocery]);
 
             const addProduct = async (product) => {
-                const newProduct = { ...product, id: Date.now().toString(), addedAt: new Date().toISOString() };
-                setStock(prev => [newProduct, ...prev]);
-                confetti({
-                    particleCount: 100,
-                    spread: 70,
-                    origin: { y: 0.6 },
-                    colors: ['#006573', '#50e1f9', '#ffffff']
+                const newProduct = { ...product, id: product.id || Date.now().toString(), addedAt: new Date().toISOString() };
+                setStock(prev => {
+                    const exists = prev.find(p => p.id === newProduct.id);
+                    if (exists) return prev.map(p => p.id === newProduct.id ? newProduct : p);
+                    return [newProduct, ...prev];
                 });
+                confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
                 setActiveTab('stock');
-                await saveToGoogleSheets(newProduct);
+                await saveToGoogleSheets({ ...newProduct, action: 'add' }, 'stock');
             };
 
-            const removeProduct = (id) => {
+            const addToGrocery = async (item) => {
+                const newItem = { 
+                    id: Date.now().toString(), 
+                    name: item.name, 
+                    brand: item.brand || '',
+                    category: item.category, 
+                    quantity: 1, 
+                    unit: item.unit || 'unité',
+                    addedAt: new Date().toISOString() 
+                };
+                setGrocery(prev => [newItem, ...prev]);
+                setPromptItem(null);
+                setNotification({ message: `"${item.name}" ajouté à l'épicerie !` });
+                setTimeout(() => setNotification(null), 3000);
+                await saveToGoogleSheets({ ...newItem, action: 'add' }, 'epicerie');
+            };
+
+            const updateQuantity = async (id, delta) => {
+                setStock(prev => {
+                    return prev.map(item => {
+                        if (item.id === id) {
+                            const newQty = Math.max(0, (Number(item.quantity) || 0) + delta);
+                            if (newQty === 0 && delta < 0) {
+                                setPromptItem(item);
+                            }
+                            const updated = { ...item, quantity: newQty };
+                            saveToGoogleSheets({ ...updated, action: 'update' }, 'stock');
+                            return updated;
+                        }
+                        return item;
+                    });
+                });
+            };
+
+            const removeFromStock = async (id) => {
+                const item = stock.find(p => p.id === id);
                 setStock(prev => prev.filter(p => p.id !== id));
+                await saveToGoogleSheets({ id, action: 'delete' }, 'stock');
+            };
+
+            const removeFromGrocery = async (id) => {
+                setGrocery(prev => prev.filter(i => i.id !== id));
+                await saveToGoogleSheets({ id, action: 'delete' }, 'epicerie');
+            };
+
+            const handleEdit = async (updatedProduct) => {
+                setStock(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p));
+                setEditingProduct(null);
+                // Note: In a real app, we'd need an 'update' endpoint in the script
+                // For now, we save it as a new entry or rely on local state + manual sync
+                await saveToGoogleSheets(updatedProduct, 'stock');
             };
 
             const filteredStock = stock.filter(p => 
@@ -264,71 +436,78 @@
                             <Icon name="snowflake" className="text-primary w-6 h-6" />
                             <h1 className="text-2xl font-black text-primary tracking-tighter font-headline">Congélo</h1>
                         </div>
+                        {isLoading && <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>}
                     </header>
 
                     <main className="pt-24 px-6 max-w-2xl mx-auto">
                         <AnimatePresence mode="wait">
                             {activeTab === 'stock' && (
                                 <motion.div key="stock" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-                                    <section className="mb-10">
-                                        <div className="mb-8">
-                                            <p className="text-on-surface-variant font-label text-sm uppercase tracking-widest mb-1">Inventaire Actuel</p>
-                                            <div className="flex justify-between items-end">
-                                                <h2 className="text-4xl font-black text-primary tracking-tight font-headline">Stock</h2>
-                                                {syncError && (
-                                                    <button onClick={loadData} className="flex items-center gap-1 text-red-500 text-[10px] font-bold uppercase hover:underline">
-                                                        <Icon name="alert-circle" className="w-3 h-3" />
-                                                        <span>Erreur de synchro (Réessayer)</span>
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
+                                    <div className="mb-8">
+                                        <h2 className="text-4xl font-black text-primary tracking-tight font-headline">Mon Stock</h2>
+                                        <p className="text-on-surface-variant text-xs font-bold uppercase opacity-50">Appui long pour modifier</p>
+                                    </div>
 
-                                        <div className="relative group mb-8">
-                                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant">
-                                                <Icon name="search" className="w-5 h-5" />
-                                            </div>
-                                            <input 
-                                                className="w-full bg-white/40 backdrop-blur-md border-none focus:ring-2 focus:ring-primary/20 rounded-xl py-4 pl-12 pr-4 text-on-surface font-headline font-medium shadow-sm transition-all"
-                                                placeholder="Rechercher un ingrédient..."
-                                                value={searchQuery}
-                                                onChange={(e) => setSearchQuery(e.target.value)}
-                                            />
+                                    <div className="relative mb-8">
+                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant">
+                                            <Icon name="search" className="w-5 h-5" />
                                         </div>
+                                        <input 
+                                            className="w-full bg-white/40 backdrop-blur-md border-none focus:ring-2 focus:ring-primary/20 rounded-xl py-4 pl-12 pr-4 text-on-surface font-headline font-medium shadow-sm transition-all"
+                                            placeholder="Rechercher..."
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                        />
+                                    </div>
 
-                                        <div className="grid gap-4">
-                                            {filteredStock.length === 0 ? (
-                                                <div className="text-center py-20 opacity-50">
-                                                    <Icon name="package" className="w-12 h-12 mx-auto mb-4" />
-                                                    <p>Votre congélateur est vide.</p>
-                                                </div>
-                                            ) : (
-                                                filteredStock.map((item, idx) => (
-                                                    <StockCard key={item.id || idx} item={item} onRemove={() => removeProduct(item.id)} />
-                                                ))
-                                            )}
-                                        </div>
-                                    </section>
+                                    <div className="grid gap-4">
+                                        {filteredStock.length === 0 ? (
+                                            <div className="text-center py-20 opacity-30">
+                                                <Icon name="package" className="w-16 h-16 mx-auto mb-4" />
+                                                <p className="font-bold">Aucun produit trouvé</p>
+                                            </div>
+                                        ) : (
+                                            filteredStock.map((item) => (
+                                                <StockCard 
+                                                    key={item.id} 
+                                                    item={item} 
+                                                    onRemove={() => removeFromStock(item.id)}
+                                                    onUpdate={updateQuantity}
+                                                    onLongPress={setEditingProduct}
+                                                />
+                                            ))
+                                        )}
+                                    </div>
                                 </motion.div>
                             )}
 
                             {activeTab === 'grocery' && (
                                 <motion.div key="grocery" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-                                    <section className="mb-10">
-                                        <div className="relative overflow-hidden rounded-xl h-48 mb-8 shadow-xl">
-                                            <img src="https://picsum.photos/seed/grocery/800/400" alt="Grocery" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                                            <div className="absolute inset-0 bg-gradient-to-t from-primary/60 to-transparent"></div>
-                                            <div className="absolute bottom-6 left-6">
-                                                <h2 className="text-3xl font-headline font-extrabold text-white tracking-tight">Liste de Courses</h2>
-                                                <p className="text-white/90 font-label">Préparez vos prochains achats</p>
+                                    <div className="mb-8">
+                                        <h2 className="text-4xl font-black text-primary tracking-tight font-headline">Épicerie</h2>
+                                        <p className="text-on-surface-variant text-xs font-bold uppercase opacity-50">Liste de courses</p>
+                                    </div>
+
+                                    <div className="grid gap-3">
+                                        {grocery.length === 0 ? (
+                                            <div className="text-center py-20 opacity-30">
+                                                <Icon name="shopping-cart" className="w-16 h-16 mx-auto mb-4" />
+                                                <p className="font-bold">Liste vide</p>
                                             </div>
-                                        </div>
-                                        <div className="glass-card p-8 rounded-xl text-center opacity-70">
-                                            <Icon name="shopping-cart" className="w-12 h-12 mx-auto mb-4 text-primary" />
-                                            <p className="font-headline font-bold">Bientôt disponible</p>
-                                            <p className="text-sm">La synchronisation intelligente arrive bientôt.</p>
-                                        </div>
-                                    </section>
+                                        ) : (
+                                            grocery.map((item) => (
+                                                <GroceryCard 
+                                                    key={item.id} 
+                                                    item={item} 
+                                                    onRemove={() => removeFromGrocery(item.id)}
+                                                    onMoveToStock={() => {
+                                                        addProduct({ ...item, quantity: 1 });
+                                                        removeFromGrocery(item.id);
+                                                    }}
+                                                />
+                                            ))
+                                        )}
+                                    </div>
                                 </motion.div>
                             )}
 
@@ -340,22 +519,71 @@
                         </AnimatePresence>
                     </main>
 
+                    {editingProduct && (
+                        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
+                            <div className="w-full max-w-md">
+                                <AddProductView 
+                                    initialData={editingProduct} 
+                                    onAdd={handleEdit} 
+                                    onCancel={() => setEditingProduct(null)}
+                                    isEditing={true}
+                                />
+                            </div>
+                        </div>
+                    )}
+
                     <nav className="fixed bottom-0 left-0 w-full flex justify-around items-center px-4 pb-8 pt-3 bg-white/60 backdrop-blur-md rounded-t-[1.5rem] z-50 shadow-lg">
                         <NavButton active={activeTab === 'stock'} onClick={() => setActiveTab('stock')} iconName="package" label="Stock" />
                         <NavButton active={activeTab === 'grocery'} onClick={() => setActiveTab('grocery')} iconName="shopping-cart" label="Épicerie" />
                         <NavButton active={activeTab === 'add'} onClick={() => setActiveTab('add')} iconName="plus-circle" label="Ajouter" />
                     </nav>
+
+                    <AnimatePresence>
+                        {promptItem && (
+                            <Modal title="Produit épuisé" onClose={() => setPromptItem(null)}>
+                                <p className="text-on-surface-variant mb-6">
+                                    <strong>{promptItem.name}</strong> est à zéro. Voulez-vous l'ajouter à votre liste d'épicerie ?
+                                </p>
+                                <div className="flex gap-3">
+                                    <button 
+                                        onClick={() => setPromptItem(null)}
+                                        className="flex-1 py-3 rounded-xl bg-surface-variant text-on-surface-variant font-bold"
+                                    >
+                                        Non
+                                    </button>
+                                    <button 
+                                        onClick={() => addToGrocery(promptItem)}
+                                        className="flex-1 py-3 rounded-xl bg-primary text-white font-bold shadow-lg"
+                                    >
+                                        Oui, ajouter
+                                    </button>
+                                </div>
+                            </Modal>
+                        )}
+
+                        {notification && (
+                            <motion.div 
+                                initial={{ y: 100, opacity: 0 }}
+                                animate={{ y: 0, opacity: 1 }}
+                                exit={{ y: 100, opacity: 0 }}
+                                className="fixed bottom-28 left-1/2 -translate-x-1/2 z-[150] bg-primary text-white px-6 py-3 rounded-full shadow-xl font-bold flex items-center gap-2"
+                            >
+                                <Icon name="check-circle" className="w-5 h-5" />
+                                {notification.message}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
             );
         }
 
-        function AddProductView({ onAdd }) {
-            const [step, setStep] = useState('choice');
-            const [formData, setFormData] = useState({
+        function AddProductView({ onAdd, initialData, onCancel, isEditing }) {
+            const [step, setStep] = useState(isEditing ? 'manual' : 'choice');
+            const [formData, setFormData] = useState(initialData || {
                 name: '', brand: '', location: 'Général', category: 'Autres',
                 quantity: 1, unit: 'unité', expiryDate: '', imageUrl: '', isFavorite: false
             });
-            const [photo, setPhoto] = useState(null);
+            const [photo, setPhoto] = useState(formData.imageUrl || null);
             const videoRef = useRef(null);
 
             useEffect(() => {
@@ -373,7 +601,7 @@
                     setFormData(prev => ({ ...prev, ...productInfo }));
                     setStep('manual');
                 } else {
-                    alert("Produit non trouvé. Veuillez l'ajouter manuellement.");
+                    // Custom notification instead of alert
                     setStep('manual');
                 }
             };
@@ -401,11 +629,13 @@
             };
 
             return (
-                <div className="space-y-8">
-                    <div className="relative mb-12">
-                        <h2 className="font-headline font-extrabold text-4xl text-on-surface tracking-tight mb-2">Ajouter un produit</h2>
-                        <p className="font-label text-on-surface-variant text-sm tracking-wide uppercase">Archivez vos nouvelles denrées</p>
-                    </div>
+                <div className={`space-y-8 ${isEditing ? 'bg-surface p-8 rounded-3xl shadow-2xl max-h-[90vh] overflow-y-auto' : ''}`}>
+                    {!isEditing && (
+                        <div className="relative mb-12">
+                            <h2 className="font-headline font-extrabold text-4xl text-on-surface tracking-tight mb-2">Ajouter</h2>
+                            <p className="font-label text-on-surface-variant text-sm tracking-wide uppercase">Nouveau produit</p>
+                        </div>
+                    )}
 
                     {step === 'choice' && (
                         <div className="grid gap-6">
@@ -413,19 +643,13 @@
                                 <div className="w-16 h-16 rounded-full frost-gradient flex items-center justify-center text-white group-hover:scale-110 transition-transform">
                                     <Icon name="barcode" className="w-8 h-8" />
                                 </div>
-                                <div className="text-center">
-                                    <h3 className="font-headline font-bold text-xl">Scanner un code-barres</h3>
-                                    <p className="text-sm text-on-surface-variant">Utilisez l'API Open Food Facts</p>
-                                </div>
+                                <h3 className="font-headline font-bold text-xl">Scanner</h3>
                             </button>
                             <button onClick={() => setStep('manual')} className="glass-card p-8 rounded-xl flex flex-col items-center gap-4 hover:bg-white/60 transition-all group">
                                 <div className="w-16 h-16 rounded-full bg-surface-variant flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
                                     <Icon name="plus" className="w-8 h-8" />
                                 </div>
-                                <div className="text-center">
-                                    <h3 className="font-headline font-bold text-xl">Ajout manuel</h3>
-                                    <p className="text-sm text-on-surface-variant">Saisissez les détails vous-même</p>
-                                </div>
+                                <h3 className="font-headline font-bold text-xl">Manuel</h3>
                             </button>
                         </div>
                     )}
@@ -433,23 +657,23 @@
                     {step === 'scan' && (
                         <div className="glass-card rounded-xl p-6 overflow-hidden">
                             <div className="flex justify-between items-center mb-4">
-                                <h3 className="font-headline font-bold">Scanner le produit</h3>
+                                <h3 className="font-headline font-bold">Scanner</h3>
                                 <button onClick={() => setStep('choice')}><Icon name="x" /></button>
                             </div>
-                            <div id="reader" className="w-full rounded-xl overflow-hidden"></div>
                             <ScannerComponent onResult={handleScan} />
                         </div>
                     )}
 
                     {step === 'manual' && (
-                        <div className="glass-card rounded-xl p-8 shadow-sm space-y-8">
+                        <div className={`${isEditing ? '' : 'glass-card p-8 rounded-xl'} space-y-6`}>
                             <div className="flex justify-between items-center">
-                                <h3 className="font-headline font-bold text-xl">Détails du produit</h3>
-                                <button onClick={() => setStep('choice')}><Icon name="x" /></button>
+                                <h3 className="font-headline font-bold text-xl">{isEditing ? 'Modifier' : 'Détails'}</h3>
+                                <button onClick={isEditing ? onCancel : () => setStep('choice')}><Icon name="x" /></button>
                             </div>
-                            <div className="space-y-6">
+                            
+                            <div className="space-y-4">
                                 <div className="space-y-2">
-                                    <label className="font-label text-xs font-semibold uppercase tracking-widest text-on-surface-variant">Photo du produit</label>
+                                    <label className="text-[10px] uppercase font-black text-on-surface-variant/40">Photo</label>
                                     {photo ? (
                                         <div className="relative rounded-xl overflow-hidden aspect-video">
                                             <img src={photo} alt="Produit" className="w-full h-full object-cover" />
@@ -458,36 +682,45 @@
                                             </button>
                                         </div>
                                     ) : (
-                                        <div className="space-y-4">
-                                            <div className="relative rounded-xl overflow-hidden aspect-video bg-black/5 flex items-center justify-center">
-                                                <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-                                                <button onClick={takePhoto} className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-primary text-white p-4 rounded-full shadow-lg">
-                                                    <Icon name="camera" />
-                                                </button>
-                                            </div>
-                                            <button onClick={startCamera} className="text-xs text-primary font-bold uppercase tracking-widest flex items-center gap-2">
-                                                <Icon name="camera" className="w-4 h-4" /> Activer la caméra
+                                        <div className="relative rounded-xl overflow-hidden aspect-video bg-black/5 flex items-center justify-center">
+                                            <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+                                            <button onClick={takePhoto} className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-primary text-white p-4 rounded-full shadow-lg">
+                                                <Icon name="camera" />
                                             </button>
+                                            <button onClick={startCamera} className="absolute top-4 right-4 bg-white/20 p-2 rounded-full text-white"><Icon name="refresh-cw" className="w-4 h-4" /></button>
                                         </div>
                                     )}
                                 </div>
-                                <input className="w-full bg-surface-variant/40 border-none rounded-xl py-4 px-5 text-on-surface focus:ring-2 focus:ring-primary/20 font-headline font-semibold" placeholder="Nom de l'article" value={formData.name} onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} />
+
+                                <input className="w-full bg-surface-variant/40 border-none rounded-xl py-4 px-5 text-on-surface font-bold" placeholder="Nom" value={formData.name} onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} />
+                                
                                 <div className="grid grid-cols-2 gap-4">
-                                    <input className="w-full bg-surface-variant/40 border-none rounded-xl py-4 px-5 text-on-surface" placeholder="Marque" value={formData.brand} onChange={e => setFormData(p => ({ ...p, brand: e.target.value }))} />
-                                    <input className="w-full bg-surface-variant/40 border-none rounded-xl py-4 px-5 text-on-surface" placeholder="Emplacement" value={formData.location} onChange={e => setFormData(p => ({ ...p, location: e.target.value }))} />
+                                    <input className="w-full bg-surface-variant/40 border-none rounded-xl py-4 px-5 text-on-surface text-sm" placeholder="Marque" value={formData.brand} onChange={e => setFormData(p => ({ ...p, brand: e.target.value }))} />
+                                    <input className="w-full bg-surface-variant/40 border-none rounded-xl py-4 px-5 text-on-surface text-sm" placeholder="Lieu" value={formData.location} onChange={e => setFormData(p => ({ ...p, location: e.target.value }))} />
                                 </div>
+
                                 <div className="grid grid-cols-2 gap-4">
-                                    <input type="number" className="w-full bg-surface-variant/40 border-none rounded-xl py-4 px-5 text-on-surface" value={formData.quantity} onChange={e => setFormData(p => ({ ...p, quantity: Number(e.target.value) }))} />
+                                    <div className="flex items-center bg-surface-variant/40 rounded-xl px-3">
+                                        <button onClick={() => setFormData(p => ({ ...p, quantity: Math.max(0, p.quantity - 1) }))} className="p-2 text-primary"><Icon name="minus" className="w-4 h-4" /></button>
+                                        <input type="number" className="w-full bg-transparent border-none text-center font-bold" value={formData.quantity} onChange={e => setFormData(p => ({ ...p, quantity: Number(e.target.value) }))} />
+                                        <button onClick={() => setFormData(p => ({ ...p, quantity: p.quantity + 1 }))} className="p-2 text-primary"><Icon name="plus" className="w-4 h-4" /></button>
+                                    </div>
                                     <select className="w-full bg-surface-variant/40 border-none rounded-xl py-4 px-5 text-on-surface" value={formData.unit} onChange={e => setFormData(p => ({ ...p, unit: e.target.value }))}>
                                         {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                                     </select>
                                 </div>
+
                                 <select className="w-full bg-surface-variant/40 border-none rounded-xl py-4 px-5 text-on-surface" value={formData.category} onChange={e => setFormData(p => ({ ...p, category: e.target.value }))}>
                                     {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                                 </select>
-                                <input type="date" className="w-full bg-surface-variant/40 border-none rounded-xl py-4 px-5 text-on-surface" value={formData.expiryDate} onChange={e => setFormData(p => ({ ...p, expiryDate: e.target.value }))} />
-                                <button onClick={() => onAdd(formData)} disabled={!formData.name} className="w-full shimmer-gradient text-on-primary font-headline font-bold py-5 rounded-full shadow-lg flex items-center justify-center gap-3 disabled:opacity-50">
-                                    <span>Enregistrer dans le stock</span>
+
+                                <div className="space-y-1">
+                                    <label className="text-[10px] uppercase font-black text-on-surface-variant/40 ml-2">Date d'expiration</label>
+                                    <input type="date" className="w-full bg-surface-variant/40 border-none rounded-xl py-4 px-5 text-on-surface" value={formData.expiryDate} onChange={e => setFormData(p => ({ ...p, expiryDate: e.target.value }))} />
+                                </div>
+
+                                <button onClick={() => onAdd(formData)} disabled={!formData.name} className="w-full shimmer-gradient text-on-primary font-headline font-bold py-5 rounded-full shadow-lg flex items-center justify-center gap-3">
+                                    <span>{isEditing ? 'Mettre à jour' : 'Enregistrer'}</span>
                                     <Icon name="check-circle" />
                                 </button>
                             </div>
@@ -498,12 +731,35 @@
         }
 
         function ScannerComponent({ onResult }) {
+            const videoRef = useRef(null);
+            const readerRef = useRef(null);
+
             useEffect(() => {
-                const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
-                scanner.render(onResult, () => {});
-                return () => scanner.clear().catch(e => console.error(e));
-            }, []);
-            return null;
+                const codeReader = new ZXing.BrowserMultiFormatReader();
+                readerRef.current = codeReader;
+                
+                codeReader.decodeFromVideoDevice(null, videoRef.current, (result, err) => {
+                    if (result) {
+                        onResult(result.text);
+                    }
+                });
+
+                return () => {
+                    if (readerRef.current) {
+                        readerRef.current.reset();
+                    }
+                };
+            }, [onResult]);
+
+            return (
+                <div className="relative aspect-square bg-black rounded-xl overflow-hidden">
+                    <video 
+                        ref={videoRef} 
+                        className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 border-2 border-primary/50 border-dashed m-12 rounded-lg pointer-events-none animate-pulse"></div>
+                </div>
+            );
         }
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
