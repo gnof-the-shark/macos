@@ -96,6 +96,20 @@
         const CATEGORIES = ['Viandes', 'Poissons', 'Légumes', 'Plats Préparés', 'Desserts', 'Autres'];
         const UNITS = ['unité', 'kg', 'g', 'L', 'ml', 'paquet', 'boîte'];
 
+        // --- Utils ---
+        const getTimestamp = () => new Date().getTime();
+
+        const haptic = (type = 'light') => {
+            if (!navigator.vibrate) return;
+            switch(type) {
+                case 'light': navigator.vibrate(10); break;
+                case 'medium': navigator.vibrate(30); break;
+                case 'success': navigator.vibrate([50, 30, 50]); break;
+                case 'warning': navigator.vibrate([100, 50, 100]); break;
+                case 'heavy': navigator.vibrate(70); break;
+            }
+        };
+
         // --- Icons ---
         const Icon = ({ name, className = "w-6 h-6" }) => {
             const iconRef = useRef(null);
@@ -170,7 +184,8 @@
 
         const fetchFromGoogleSheets = async (sheet = 'stock') => {
             try {
-                const response = await fetch(`${SCRIPT_URL}?sheet=${sheet}`, {
+                // On utilise 'sheet' comme paramètre principal et un timestamp pour le cache
+                const response = await fetch(`${SCRIPT_URL}?sheet=${sheet}&t=${getTimestamp()}`, {
                     method: 'GET',
                     mode: 'cors',
                     cache: 'no-cache',
@@ -178,8 +193,18 @@
                 });
                 if (!response.ok) return [];
                 const data = await response.json();
+                
+                // Si le script renvoie une erreur (ex: feuille non trouvée), on log l'erreur
+                if (data.error) {
+                    console.error("Erreur script:", data.error);
+                    return [];
+                }
+                
                 return Array.isArray(data) ? data : [];
-            } catch (error) { return []; }
+            } catch (error) { 
+                console.error(`Erreur lors de la récupération (${sheet}):`, error);
+                return []; 
+            }
         };
 
         // --- Components ---
@@ -197,7 +222,7 @@
 
         function NavButton({ active, onClick, iconName, label }) {
             return (
-                <button onClick={onClick} className={`flex flex-col items-center justify-center px-5 py-2 rounded-[1.25rem] transition-all duration-300 active:scale-90 ${active ? 'bg-[#006573]/10 text-[#006573]' : 'text-[#40484c]/60'}`}>
+                <button onClick={() => { haptic('light'); onClick(); }} className={`flex flex-col items-center justify-center px-5 py-2 rounded-[1.25rem] transition-all duration-300 active:scale-90 ${active ? 'bg-[#006573]/10 text-[#006573]' : 'text-[#40484c]/60'}`}>
                     <div className={`${active ? 'scale-110' : ''} transition-transform mb-1`}>
                         <Icon name={iconName} className="w-6 h-6" />
                     </div>
@@ -211,7 +236,10 @@
             const timerRef = useRef();
 
             const handleStart = () => {
-                timerRef.current = setTimeout(() => onLongPress(item), 600);
+                timerRef.current = setTimeout(() => {
+                    haptic('medium');
+                    onLongPress(item);
+                }, 600);
             };
             const handleEnd = () => clearTimeout(timerRef.current);
 
@@ -240,21 +268,21 @@
                                 </div>
                             </div>
                         </div>
-                        <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="text-[#40484c]/30 hover:text-red-500 transition-colors p-2">
+                        <button onClick={(e) => { e.stopPropagation(); haptic('warning'); onRemove(); }} className="text-[#40484c]/30 hover:text-red-500 transition-colors p-2">
                             <Icon name="Trash2" className="w-5 h-5" />
                         </button>
                     </div>
                     
                     <div className="flex justify-between items-center bg-white/30 rounded-lg p-2">
                         <div className="flex items-center gap-3">
-                            <button onClick={(e) => { e.stopPropagation(); onUpdate(item.id, -1); }} className="w-8 h-8 rounded-full bg-[#006573]/10 flex items-center justify-center text-[#006573] active:bg-[#006573] active:text-white transition-colors">
+                            <button onClick={(e) => { e.stopPropagation(); haptic('light'); onUpdate(item.id, -1); }} className="w-8 h-8 rounded-full bg-[#006573]/10 flex items-center justify-center text-[#006573] active:bg-[#006573] active:text-white transition-colors">
                                 <Icon name="Minus" className="w-4 h-4" />
                             </button>
                             <div className="text-center min-w-[60px]">
                                 <span className="block text-xs text-[#40484c] uppercase font-bold tracking-tighter">Qté</span>
                                 <span className="font-black text-[#006573]">{item.quantity} {item.unit}</span>
                             </div>
-                            <button onClick={(e) => { e.stopPropagation(); onUpdate(item.id, 1); }} className="w-8 h-8 rounded-full bg-[#006573]/10 flex items-center justify-center text-[#006573] active:bg-[#006573] active:text-white transition-colors">
+                            <button onClick={(e) => { e.stopPropagation(); haptic('light'); onUpdate(item.id, 1); }} className="w-8 h-8 rounded-full bg-[#006573]/10 flex items-center justify-center text-[#006573] active:bg-[#006573] active:text-white transition-colors">
                                 <Icon name="Plus" className="w-4 h-4" />
                             </button>
                         </div>
@@ -264,30 +292,6 @@
                                 <p className="text-[10px] font-black">{new Date(item.expiryDate).toLocaleDateString('fr-FR')}</p>
                             </div>
                         )}
-                    </div>
-                </div>
-            );
-        }
-
-        function GroceryCard({ item, onRemove, onMoveToStock }) {
-            return (
-                <div className="bg-white/40 backdrop-blur-md border border-white/30 rounded-xl p-4 shadow-sm flex justify-between items-center group animate-in slide-in-from-left-4 duration-500">
-                    <div className="flex gap-4 items-center">
-                        <div className="w-10 h-10 rounded-full bg-[#006573]/10 flex items-center justify-center text-[#006573]">
-                            <Icon name="ShoppingBasket" className="w-5 h-5" />
-                        </div>
-                        <div>
-                            <h3 className="font-bold text-[#1a1c1e]">{item.name}</h3>
-                            <p className="text-[10px] text-[#40484c] uppercase font-bold tracking-widest">{item.category}</p>
-                        </div>
-                    </div>
-                    <div className="flex gap-2">
-                        <button onClick={onMoveToStock} className="w-10 h-10 rounded-full bg-green-500/10 text-green-600 flex items-center justify-center hover:bg-green-500 hover:text-white transition-all">
-                            <Icon name="Check" className="w-5 h-5" />
-                        </button>
-                        <button onClick={onRemove} className="w-10 h-10 rounded-full bg-red-500/10 text-red-600 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all">
-                            <Icon name="X" className="w-5 h-5" />
-                        </button>
                     </div>
                 </div>
             );
@@ -312,6 +316,7 @@
             const videoRef = useRef(null);
 
             const handleScan = async (barcode) => {
+                haptic('success');
                 const info = await fetchProductByBarcode(barcode);
                 if (info) setFormData(p => ({ ...p, ...info }));
                 setStep('manual');
@@ -333,6 +338,7 @@
                     if (ctx) {
                         ctx.drawImage(videoRef.current, 0, 0);
                         const dataUrl = canvas.toDataURL('image/jpeg');
+                        haptic('medium');
                         setPhoto(dataUrl);
                         setFormData(p => ({ ...p, imageUrl: dataUrl }));
                         if (videoRef.current.srcObject) {
@@ -347,8 +353,8 @@
                     {!isEditing && <div className="mb-12"><h2 className="font-headline font-extrabold text-4xl text-[#1a1c1e] tracking-tight mb-2">Ajouter</h2><p className="text-[#40484c] text-sm tracking-wide uppercase font-bold">Nouveau produit</p></div>}
                     {step === 'choice' && (
                         <div className="grid gap-6">
-                            <button onClick={() => setStep('scan')} className="bg-white/40 backdrop-blur-md border border-white/30 p-8 rounded-xl flex flex-col items-center gap-4 hover:bg-white/60 transition-all group"><div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#006573] to-[#50e1f9] flex items-center justify-center text-white group-hover:scale-110 transition-transform"><Icon name="Barcode" className="w-8 h-8" /></div><h3 className="font-headline font-bold text-xl">Scanner</h3></button>
-                            <button onClick={() => setStep('manual')} className="bg-white/40 backdrop-blur-md border border-white/30 p-8 rounded-xl flex flex-col items-center gap-4 hover:bg-white/60 transition-all group"><div className="w-16 h-16 rounded-full bg-[#dbeff1] flex items-center justify-center text-[#006573] group-hover:scale-110 transition-transform"><Icon name="Plus" className="w-8 h-8" /></div><h3 className="font-headline font-bold text-xl">Manuel</h3></button>
+                            <button onClick={() => { haptic('light'); setStep('scan'); }} className="bg-white/40 backdrop-blur-md border border-white/30 p-8 rounded-xl flex flex-col items-center gap-4 hover:bg-white/60 transition-all group"><div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#006573] to-[#50e1f9] flex items-center justify-center text-white group-hover:scale-110 transition-transform"><Icon name="Barcode" className="w-8 h-8" /></div><h3 className="font-headline font-bold text-xl">Scanner</h3></button>
+                            <button onClick={() => { haptic('light'); setStep('manual'); }} className="bg-white/40 backdrop-blur-md border border-white/30 p-8 rounded-xl flex flex-col items-center gap-4 hover:bg-white/60 transition-all group"><div className="w-16 h-16 rounded-full bg-[#dbeff1] flex items-center justify-center text-[#006573] group-hover:scale-110 transition-transform"><Icon name="Plus" className="w-8 h-8" /></div><h3 className="font-headline font-bold text-xl">Manuel</h3></button>
                         </div>
                     )}
                     {step === 'scan' && (
@@ -364,9 +370,9 @@
                                 <div className="space-y-2">
                                     <label className="text-[10px] uppercase font-black text-[#40484c]/40">Photo</label>
                                     {photo ? (
-                                        <div className="relative rounded-xl overflow-hidden aspect-video"><img src={photo} alt="Produit" className="w-full h-full object-cover" /><button onClick={() => { setPhoto(null); startCamera(); }} className="absolute top-2 right-2 bg-black/50 text-white p-2 rounded-full"><Icon name="Trash2" className="w-4 h-4" /></button></div>
+                                        <div className="relative rounded-xl overflow-hidden aspect-video"><img src={photo} alt="Produit" className="w-full h-full object-cover" /><button onClick={() => { haptic('warning'); setPhoto(null); startCamera(); }} className="absolute top-2 right-2 bg-black/50 text-white p-2 rounded-full"><Icon name="Trash2" className="w-4 h-4" /></button></div>
                                     ) : (
-                                        <div className="relative rounded-xl overflow-hidden aspect-video bg-black/5 flex items-center justify-center"><video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" /><button onClick={takePhoto} className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-[#006573] text-white p-4 rounded-full shadow-lg"><Icon name="Camera" /></button><button onClick={startCamera} className="absolute top-4 right-4 bg-white/20 p-2 rounded-full text-white"><Icon name="RefreshCw" className="w-4 h-4" /></button></div>
+                                        <div className="relative rounded-xl overflow-hidden aspect-video bg-black/5 flex items-center justify-center"><video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" /><button onClick={() => { haptic('medium'); takePhoto(); }} className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-[#006573] text-white p-4 rounded-full shadow-lg"><Icon name="Camera" /></button><button onClick={() => { haptic('light'); startCamera(); }} className="absolute top-4 right-4 bg-white/20 p-2 rounded-full text-white"><Icon name="RefreshCw" className="w-4 h-4" /></button></div>
                                     )}
                                 </div>
                                 <input className="w-full bg-[#dbeff1]/40 border-none rounded-xl py-4 px-5 text-[#1a1c1e] font-bold outline-none" placeholder="Nom" value={formData.name} onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} />
@@ -375,12 +381,12 @@
                                     <input className="w-full bg-[#dbeff1]/40 border-none rounded-xl py-4 px-5 text-[#1a1c1e] text-sm outline-none" placeholder="Lieu" value={formData.location} onChange={e => setFormData(p => ({ ...p, location: e.target.value }))} />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div className="flex items-center bg-[#dbeff1]/40 rounded-xl px-3"><button onClick={() => setFormData(p => ({ ...p, quantity: Math.max(0, p.quantity - 1) }))} className="p-2 text-[#006573]"><Icon name="Minus" className="w-4 h-4" /></button><input type="number" className="w-full bg-transparent border-none text-center font-bold outline-none" value={formData.quantity} onChange={e => setFormData(p => ({ ...p, quantity: Number(e.target.value) }))} /><button onClick={() => setFormData(p => ({ ...p, quantity: p.quantity + 1 }))} className="p-2 text-[#006573]"><Icon name="Plus" className="w-4 h-4" /></button></div>
-                                    <select className="w-full bg-[#dbeff1]/40 border-none rounded-xl py-4 px-5 text-[#1a1c1e] outline-none" value={formData.unit} onChange={e => setFormData(p => ({ ...p, unit: e.target.value }))}>{UNITS.map(u => <option key={u} value={u}>{u}</option>)}</select>
+                                    <div className="flex items-center bg-[#dbeff1]/40 rounded-xl px-3"><button onClick={() => { haptic('light'); setFormData(p => ({ ...p, quantity: Math.max(0, p.quantity - 1) })); }} className="p-2 text-[#006573]"><Icon name="Minus" className="w-4 h-4" /></button><input type="number" className="w-full bg-transparent border-none text-center font-bold outline-none" value={formData.quantity} onChange={e => setFormData(p => ({ ...p, quantity: Number(e.target.value) }))} /><button onClick={() => { haptic('light'); setFormData(p => ({ ...p, quantity: p.quantity + 1 })); }} className="p-2 text-[#006573]"><Icon name="Plus" className="w-4 h-4" /></button></div>
+                                    <select className="w-full bg-[#dbeff1]/40 border-none rounded-xl py-4 px-5 text-[#1a1c1e] outline-none" value={formData.unit} onChange={e => { haptic('light'); setFormData(p => ({ ...p, unit: e.target.value })); }}>{UNITS.map(u => <option key={u} value={u}>{u}</option>)}</select>
                                 </div>
-                                <select className="w-full bg-[#dbeff1]/40 border-none rounded-xl py-4 px-5 text-[#1a1c1e] outline-none" value={formData.category} onChange={e => setFormData(p => ({ ...p, category: e.target.value }))}>{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                                <select className="w-full bg-[#dbeff1]/40 border-none rounded-xl py-4 px-5 text-[#1a1c1e] outline-none" value={formData.category} onChange={e => { haptic('light'); setFormData(p => ({ ...p, category: e.target.value })); }}>{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
                                 <div className="space-y-1"><label className="text-[10px] uppercase font-black text-[#40484c]/40 ml-2">Date d'expiration</label><input type="date" className="w-full bg-[#dbeff1]/40 border-none rounded-xl py-4 px-5 text-[#1a1c1e] outline-none" value={formData.expiryDate} onChange={e => setFormData(p => ({ ...p, expiryDate: e.target.value }))} /></div>
-                                <button onClick={() => onAdd(formData)} disabled={!formData.name} className="w-full bg-gradient-to-r from-[#006573] to-[#008ba1] text-white font-headline font-bold py-5 rounded-full shadow-lg flex items-center justify-center gap-3 active:scale-95 transition-transform"><span>{isEditing ? 'Mettre à jour' : 'Enregistrer'}</span><Icon name="CheckCircle" /></button>
+                                <button onClick={() => { haptic('success'); onAdd(formData); }} disabled={!formData.name} className="w-full bg-gradient-to-r from-[#006573] to-[#008ba1] text-white font-headline font-bold py-5 rounded-full shadow-lg flex items-center justify-center gap-3 active:scale-95 transition-transform"><span>{isEditing ? 'Mettre à jour' : 'Enregistrer'}</span><Icon name="CheckCircle" /></button>
                             </div>
                         </div>
                     )}
@@ -391,22 +397,16 @@
         function App() {
             const [activeTab, setActiveTab] = useState('stock');
             const [stock, setStock] = useState([]);
-            const [grocery, setGrocery] = useState([]);
             const [searchQuery, setSearchQuery] = useState('');
             const [isLoading, setIsLoading] = useState(true);
             const [editingProduct, setEditingProduct] = useState(null);
-            const [promptItem, setPromptItem] = useState(null);
             const [notification, setNotification] = useState(null);
 
             const loadAllData = async () => {
                 setIsLoading(true);
                 try {
-                    const [stockData, groceryData] = await Promise.all([
-                        fetchFromGoogleSheets('stock'),
-                        fetchFromGoogleSheets('epicerie')
-                    ]);
+                    const stockData = await fetchFromGoogleSheets('stock');
                     setStock(stockData);
-                    setGrocery(groceryData);
                 } catch (err) { console.error(err); }
                 setIsLoading(false);
             };
@@ -428,21 +428,11 @@
                 await saveToGoogleSheets(newProduct, 'stock');
             };
 
-            const addToGrocery = async (item) => {
-                const newItem = { id: Date.now().toString(), name: item.name, brand: item.brand || '', category: item.category, quantity: 1, unit: item.unit || 'unité', addedAt: new Date().toISOString(), action: 'add' };
-                setGrocery(prev => [...prev, newItem]);
-                setPromptItem(null);
-                setNotification(`"${item.name}" ajouté à l'épicerie !`);
-                setTimeout(() => setNotification(null), 3000);
-                await saveToGoogleSheets(newItem, 'epicerie');
-            };
-
             const updateQuantity = async (id, delta) => {
                 let itemToSave = null;
                 setStock(prev => prev.map(item => {
                     if (item.id === id) {
                         const newQty = Math.max(0, (Number(item.quantity) || 0) + delta);
-                        if (newQty === 0 && delta < 0) setPromptItem(item);
                         itemToSave = { ...item, quantity: newQty, action: 'update' };
                         return itemToSave;
                     }
@@ -454,11 +444,6 @@
             const removeFromStock = async (id) => {
                 setStock(prev => prev.filter(p => p.id !== id));
                 await saveToGoogleSheets({ id, action: 'delete' }, 'stock');
-            };
-
-            const removeFromGrocery = async (id) => {
-                setGrocery(prev => prev.filter(i => i.id !== id));
-                await saveToGoogleSheets({ id, action: 'delete' }, 'epicerie');
             };
 
             const handleEdit = async (updatedProduct) => {
@@ -506,24 +491,6 @@
                             </div>
                         )}
 
-                        {activeTab === 'grocery' && (
-                            <div className="animate-in fade-in slide-in-from-right-4 duration-500">
-                                <div className="mb-8"><h2 className="text-4xl font-black text-[#006573] tracking-tight font-headline">Épicerie</h2><p className="text-[#40484c] text-xs font-bold uppercase opacity-50">Liste de courses</p></div>
-                                <div className="grid gap-3">
-                                    {grocery.length === 0 ? (
-                                        <div className="text-center py-20 opacity-30">
-                                            <Icon name="ShoppingCart" className="w-16 h-16 mx-auto mb-4" />
-                                            <p className="font-bold">Liste vide</p>
-                                        </div>
-                                    ) : (
-                                        grocery.map((item) => (
-                                            <GroceryCard key={item.id} item={item} onRemove={() => removeFromGrocery(item.id)} onMoveToStock={() => { addProduct({ ...item, quantity: 1 }); removeFromGrocery(item.id); }} />
-                                        ))
-                                    )}
-                                </div>
-                            </div>
-                        )}
-
                         {activeTab === 'add' && (
                             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                                 <AddProductView onAdd={addProduct} />
@@ -541,19 +508,8 @@
 
                     <nav className="fixed bottom-0 left-0 w-full flex justify-around items-center px-4 pb-8 pt-3 bg-white/60 backdrop-blur-md rounded-t-[1.5rem] z-50 shadow-lg border-t border-white/20">
                         <NavButton active={activeTab === 'stock'} onClick={() => setActiveTab('stock')} iconName="Package" label="Stock" />
-                        <NavButton active={activeTab === 'grocery'} onClick={() => setActiveTab('grocery')} iconName="ShoppingCart" label="Épicerie" />
                         <NavButton active={activeTab === 'add'} onClick={() => setActiveTab('add')} iconName="PlusCircle" label="Ajouter" />
                     </nav>
-
-                    {promptItem && (
-                        <Modal title="Produit épuisé" onClose={() => setPromptItem(null)}>
-                            <p className="text-[#40484c] mb-6"><strong>{promptItem.name}</strong> est à zéro. L'ajouter à l'épicerie ?</p>
-                            <div className="flex gap-3">
-                                <button onClick={() => setPromptItem(null)} className="flex-1 py-3 rounded-xl bg-[#dbeff1] text-[#40484c] font-bold">Non</button>
-                                <button onClick={() => addToGrocery(promptItem)} className="flex-1 py-3 rounded-xl bg-[#006573] text-white font-bold shadow-lg">Oui</button>
-                            </div>
-                        </Modal>
-                    )}
 
                     {notification && (
                         <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-[150] bg-[#006573] text-white px-6 py-3 rounded-full shadow-xl font-bold flex items-center gap-2 animate-in slide-in-from-bottom-10 duration-300">
