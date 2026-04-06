@@ -284,24 +284,28 @@
         async function processQueue() {
             if (isProcessingQueue || syncQueue.length === 0) return;
             isProcessingQueue = true;
+            let shouldRetry = false;
             try {
                 while (syncQueue.length > 0) {
                     const payload = syncQueue[0];
                     const formData = new FormData();
                     formData.append('data', JSON.stringify(payload));
-                    await fetch(SCRIPT_URL, { 
-                        method: 'POST', 
-                        mode: 'no-cors',
-                        body: formData
-                    });
+                    const response = await fetch(SCRIPT_URL, { method: 'POST', body: formData });
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    const result = await response.json();
+                    if (!result || result.status !== 'success') throw new Error('Sync rejected by server');
                     syncQueue.shift();
                     localStorage.setItem('syncQueue', JSON.stringify(syncQueue));
                     updateSyncIndicator();
                 }
             } catch (e) { 
                 console.error("Sync error - retrying later", e); 
+                shouldRetry = true;
             } finally {
                 isProcessingQueue = false;
+                if (shouldRetry && syncQueue.length > 0) {
+                    setTimeout(processQueue, 5000);
+                }
             }
         }
 
