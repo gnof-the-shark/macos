@@ -365,8 +365,40 @@
             };
         }
 
+        function normalizePayloadForCloud(payload) {
+            const normalized = { ...payload };
+            let copiedName = false;
+            let copiedBrand = false;
+            let copiedQuantity = false;
+            let copiedChecked = false;
+
+            if (normalized.nom === undefined && normalized.name !== undefined) {
+                normalized.nom = normalized.name;
+                copiedName = true;
+            }
+            if (normalized.marque === undefined && normalized.brand !== undefined) {
+                normalized.marque = normalized.brand;
+                copiedBrand = true;
+            }
+            if (normalized.quantite === undefined && normalized.quantity !== undefined) {
+                normalized.quantite = normalized.quantity;
+                copiedQuantity = true;
+            }
+            if (normalized.coche === undefined && normalized.checked !== undefined) {
+                normalized.coche = normalized.checked;
+                copiedChecked = true;
+            }
+
+            if (copiedName) delete normalized.name;
+            if (copiedBrand) delete normalized.brand;
+            if (copiedQuantity) delete normalized.quantity;
+            if (copiedChecked) delete normalized.checked;
+
+            return normalized;
+        }
+
         async function queueAction(payload) {
-            syncQueue.push(addSyncMetadata(payload));
+            syncQueue.push(addSyncMetadata(normalizePayloadForCloud(payload)));
             saveQueueToStorage();
             syncError = null;
             updateSyncIndicator();
@@ -640,10 +672,10 @@
             const payload = {
                 action: "add", target: "inventory",
                 barcode: tempProd.barcode,
-                name: document.getElementById('prod-name').value,
-                brand: document.getElementById('prod-brand').value,
+                nom: document.getElementById('prod-name').value,
+                marque: document.getElementById('prod-brand').value,
                 image: tempProd.image || "",
-                quantity: quantity,
+                quantite: quantity,
                 emplacement: document.getElementById('prod-cat').value,
                 favoris: false
             };
