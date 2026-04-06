@@ -5,94 +5,108 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Congélo - Gestion de Stock</title>
     
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=Manrope:wght@800&display=swap" rel="stylesheet">
-    
-    <!-- Tailwind CSS -->
+    <!-- Tailwind CSS Play CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- React & Libraries -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    
+    <!-- Babel for JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+    
+    <!-- ZXing for Barcode -->
     <script src="https://unpkg.com/@zxing/library@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-    <script src="https://unpkg.com/framer-motion@10.16.4/dist/framer-motion.js"></script>
-
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#006573',
-                        'on-primary': '#ffffff',
-                        surface: '#f0f9fa',
-                        'surface-variant': '#dbeff1',
-                        'on-surface': '#1a1c1e',
-                        'on-surface-variant': '#40484c',
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        headline: ['Manrope', 'sans-serif'],
-                    },
-                }
-            }
-        }
-    </script>
 
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=Manrope:wght@800&display=swap');
+        
+        :root {
+            --primary: #006573;
+            --surface: #f0f9fa;
+        }
+
         body {
-            background-color: #f0f9fa;
+            background-color: var(--surface);
             color: #1a1c1e;
             font-family: 'Inter', sans-serif;
             overflow-x: hidden;
             -webkit-tap-highlight-color: transparent;
         }
+
+        .font-headline { font-family: 'Manrope', sans-serif; }
+        
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .animate-spin-custom { animation: spin 1s linear infinite; }
+        
         .glass-card {
             background: rgba(255, 255, 255, 0.4);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.3);
         }
-        .frost-gradient {
-            background: linear-gradient(135deg, #006573 0%, #50e1f9 100%);
+
+        /* Hide scrollbar for Chrome, Safari and Opera */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
         }
-        .shimmer-gradient {
-            background: linear-gradient(90deg, #006573, #008ba1, #006573);
-            background-size: 200% 100%;
-            animation: shimmer 3s infinite linear;
-        }
-        @keyframes shimmer {
-            0% { background-position: 200% 0; }
-            100% { background-position: -200% 0; }
-        }
-        video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
+
+        /* Hide scrollbar for IE, Edge and Firefox */
+        .no-scrollbar {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
         }
     </style>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        headline: ['Manrope', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: '#006573',
+                    }
+                }
+            }
+        }
+    </script>
 </head>
 <body>
-    <div id="root"></div>
+    <div id="root">
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; color: #006573;">
+            <div style="width: 40px; height: 40px; border: 4px solid #006573; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px;"></div>
+            <h2 style="margin: 0; font-weight: 900; letter-spacing: -0.05em;">Congélo est en cours de chargement...</h2>
+        </div>
+    </div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef, useCallback } = React;
-        const { motion, AnimatePresence } = window.Motion;
-
+        const { useState, useEffect, useRef, useCallback, useMemo } = React;
+        
         // --- Configuration ---
         const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzX1bQV2UuYHisMGdyO-nh96gQnFGRnm5U5fOtsBjs1aGeIxrUaV8N6CWsFd59AsuA/exec';
         const CATEGORIES = ['Viandes', 'Poissons', 'Légumes', 'Plats Préparés', 'Desserts', 'Autres'];
         const UNITS = ['unité', 'kg', 'g', 'L', 'ml', 'paquet', 'boîte'];
 
-        // --- Icons Helper ---
+        // --- Icons ---
         const Icon = ({ name, className = "w-6 h-6" }) => {
+            const iconRef = useRef(null);
             useEffect(() => {
-                if (window.lucide) lucide.createIcons();
-            }, [name]);
+                if (lucide && lucide.createIcons) {
+                    lucide.createIcons({
+                        attrs: { class: className },
+                        nameAttr: 'data-lucide'
+                    });
+                }
+            }, [name, className]);
             return <i data-lucide={name} className={className}></i>;
         };
 
@@ -107,7 +121,6 @@
                         name: p.product_name || p.generic_name || 'Produit inconnu',
                         brand: p.brands || '',
                         imageUrl: p.image_url || p.image_front_url,
-                        barcode: barcode,
                         category: mapOFFCategory(p.categories_tags)
                     };
                 }
@@ -127,14 +140,32 @@
 
         const saveToGoogleSheets = async (data, sheet = 'stock') => {
             try {
+                const payload = {
+                    id: data.id,
+                    name: data.name || "",
+                    brand: data.brand || "",
+                    quantity: data.quantity !== undefined ? data.quantity : 0,
+                    unit: data.unit || "unité",
+                    category: data.category || "Autres",
+                    location: data.location || "Général",
+                    expiryDate: data.expiryDate || "",
+                    imageUrl: data.imageUrl || "",
+                    addedAt: data.addedAt || new Date().toISOString(),
+                    action: data.action || "add",
+                    sheet: sheet
+                };
+
                 await fetch(SCRIPT_URL, {
                     method: 'POST',
                     mode: 'no-cors',
                     headers: { 'Content-Type': 'text/plain' },
-                    body: JSON.stringify({ ...data, sheet }),
+                    body: JSON.stringify(payload),
                 });
                 return true;
-            } catch (error) { return false; }
+            } catch (error) { 
+                console.error("Erreur Sheets:", error);
+                return false; 
+            }
         };
 
         const fetchFromGoogleSheets = async (sheet = 'stock') => {
@@ -152,29 +183,21 @@
         };
 
         // --- Components ---
-        
+
         function Modal({ title, children, onClose }) {
             return (
-                <motion.div 
-                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                    className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6"
-                    onClick={onClose}
-                >
-                    <motion.div 
-                        initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }}
-                        className="bg-white rounded-[2rem] p-8 w-full max-w-sm shadow-2xl"
-                        onClick={e => e.stopPropagation()}
-                    >
-                        <h3 className="font-headline font-black text-2xl mb-4 text-primary">{title}</h3>
+                <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6" onClick={onClose}>
+                    <div className="bg-white rounded-[2rem] p-8 w-full max-w-sm shadow-2xl animate-in fade-in zoom-in duration-300" onClick={e => e.stopPropagation()}>
+                        <h3 className="font-headline font-black text-2xl mb-4 text-[#006573]">{title}</h3>
                         {children}
-                    </motion.div>
-                </motion.div>
+                    </div>
+                </div>
             );
         }
 
         function NavButton({ active, onClick, iconName, label }) {
             return (
-                <button onClick={onClick} className={`flex flex-col items-center justify-center px-5 py-2 rounded-[1.25rem] transition-all duration-300 active:scale-90 ${active ? 'bg-primary/10 text-primary' : 'text-on-surface-variant/60'}`}>
+                <button onClick={onClick} className={`flex flex-col items-center justify-center px-5 py-2 rounded-[1.25rem] transition-all duration-300 active:scale-90 ${active ? 'bg-[#006573]/10 text-[#006573]' : 'text-[#40484c]/60'}`}>
                     <div className={`${active ? 'scale-110' : ''} transition-transform mb-1`}>
                         <Icon name={iconName} className="w-6 h-6" />
                     </div>
@@ -194,46 +217,49 @@
 
             return (
                 <div 
-                    onMouseDown={handleStart} onMouseUp={handleEnd} onTouchStart={handleStart} onTouchEnd={handleEnd}
-                    className="glass-card rounded-xl p-6 shadow-sm relative overflow-hidden group transition-all active:scale-[0.98]"
+                    onMouseDown={handleStart} 
+                    onMouseUp={handleEnd} 
+                    onTouchStart={handleStart} 
+                    onTouchEnd={handleEnd}
+                    className="bg-white/40 backdrop-blur-md border border-white/30 rounded-xl p-6 shadow-sm relative overflow-hidden group transition-all active:scale-[0.98] animate-in slide-in-from-bottom-4 duration-500"
                 >
                     <div className="flex justify-between items-start mb-4">
                         <div className="flex gap-4 items-center">
                             {item.imageUrl ? (
                                 <img src={item.imageUrl} alt={item.name} className="w-12 h-12 rounded-xl object-cover" referrerPolicy="no-referrer" />
                             ) : (
-                                <div className="w-12 h-12 rounded-xl frost-gradient flex items-center justify-center text-white">
-                                    <Icon name="package" className="w-6 h-6" />
+                                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#006573] to-[#50e1f9] flex items-center justify-center text-white">
+                                    <Icon name="Package" className="w-6 h-6" />
                                 </div>
                             )}
                             <div>
-                                <h3 className="text-lg font-bold font-headline text-on-surface leading-tight">{item.name}</h3>
+                                <h3 className="text-lg font-bold font-headline text-[#1a1c1e] leading-tight">{item.name}</h3>
                                 <div className="flex gap-2 items-center">
-                                    <p className="text-on-surface-variant font-label text-[10px] uppercase tracking-wider">{item.category}</p>
-                                    {item.brand && <span className="text-[10px] text-primary/60 font-bold">• {item.brand}</span>}
+                                    <p className="text-[#40484c] text-[10px] uppercase tracking-wider font-bold">{item.category}</p>
+                                    {item.brand && <span className="text-[10px] text-[#006573]/60 font-bold">• {item.brand}</span>}
                                 </div>
                             </div>
                         </div>
-                        <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="text-on-surface-variant/30 hover:text-red-500 transition-colors p-2">
-                            <Icon name="trash-2" className="w-5 h-5" />
+                        <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="text-[#40484c]/30 hover:text-red-500 transition-colors p-2">
+                            <Icon name="Trash2" className="w-5 h-5" />
                         </button>
                     </div>
                     
                     <div className="flex justify-between items-center bg-white/30 rounded-lg p-2">
                         <div className="flex items-center gap-3">
-                            <button onClick={(e) => { e.stopPropagation(); onUpdate(item.id, -1); }} className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary active:bg-primary active:text-white transition-colors">
-                                <Icon name="minus" className="w-4 h-4" />
+                            <button onClick={(e) => { e.stopPropagation(); onUpdate(item.id, -1); }} className="w-8 h-8 rounded-full bg-[#006573]/10 flex items-center justify-center text-[#006573] active:bg-[#006573] active:text-white transition-colors">
+                                <Icon name="Minus" className="w-4 h-4" />
                             </button>
                             <div className="text-center min-w-[60px]">
-                                <span className="block text-xs text-on-surface-variant uppercase font-bold tracking-tighter">Qté</span>
-                                <span className="font-black text-primary">{item.quantity} {item.unit}</span>
+                                <span className="block text-xs text-[#40484c] uppercase font-bold tracking-tighter">Qté</span>
+                                <span className="font-black text-[#006573]">{item.quantity} {item.unit}</span>
                             </div>
-                            <button onClick={(e) => { e.stopPropagation(); onUpdate(item.id, 1); }} className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary active:bg-primary active:text-white transition-colors">
-                                <Icon name="plus" className="w-4 h-4" />
+                            <button onClick={(e) => { e.stopPropagation(); onUpdate(item.id, 1); }} className="w-8 h-8 rounded-full bg-[#006573]/10 flex items-center justify-center text-[#006573] active:bg-[#006573] active:text-white transition-colors">
+                                <Icon name="Plus" className="w-4 h-4" />
                             </button>
                         </div>
                         {item.expiryDate && (
-                            <div className={`text-right ${isExpired ? 'text-red-500' : 'text-on-surface-variant'}`}>
+                            <div className={`text-right ${isExpired ? 'text-red-500' : 'text-[#40484c]'}`}>
                                 <p className="text-[8px] uppercase font-bold">Expiration</p>
                                 <p className="text-[10px] font-black">{new Date(item.expiryDate).toLocaleDateString('fr-FR')}</p>
                             </div>
@@ -245,24 +271,119 @@
 
         function GroceryCard({ item, onRemove, onMoveToStock }) {
             return (
-                <div className="glass-card rounded-xl p-4 shadow-sm flex justify-between items-center group">
+                <div className="bg-white/40 backdrop-blur-md border border-white/30 rounded-xl p-4 shadow-sm flex justify-between items-center group animate-in slide-in-from-left-4 duration-500">
                     <div className="flex gap-4 items-center">
-                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                            <Icon name="shopping-basket" className="w-5 h-5" />
+                        <div className="w-10 h-10 rounded-full bg-[#006573]/10 flex items-center justify-center text-[#006573]">
+                            <Icon name="ShoppingBasket" className="w-5 h-5" />
                         </div>
                         <div>
-                            <h3 className="font-bold text-on-surface">{item.name}</h3>
-                            <p className="text-[10px] text-on-surface-variant uppercase font-bold tracking-widest">{item.category}</p>
+                            <h3 className="font-bold text-[#1a1c1e]">{item.name}</h3>
+                            <p className="text-[10px] text-[#40484c] uppercase font-bold tracking-widest">{item.category}</p>
                         </div>
                     </div>
                     <div className="flex gap-2">
                         <button onClick={onMoveToStock} className="w-10 h-10 rounded-full bg-green-500/10 text-green-600 flex items-center justify-center hover:bg-green-500 hover:text-white transition-all">
-                            <Icon name="check" className="w-5 h-5" />
+                            <Icon name="Check" className="w-5 h-5" />
                         </button>
                         <button onClick={onRemove} className="w-10 h-10 rounded-full bg-red-500/10 text-red-600 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all">
-                            <Icon name="x" className="w-5 h-5" />
+                            <Icon name="X" className="w-5 h-5" />
                         </button>
                     </div>
+                </div>
+            );
+        }
+
+        function ScannerComponent({ onResult }) {
+            const videoRef = useRef(null);
+            useEffect(() => {
+                const reader = new ZXing.BrowserMultiFormatReader();
+                if (videoRef.current) {
+                    reader.decodeFromVideoDevice(null, videoRef.current, (res) => { if (res) onResult(res.getText()); });
+                }
+                return () => reader.reset();
+            }, [onResult]);
+            return <div className="relative aspect-square bg-black rounded-xl overflow-hidden"><video ref={videoRef} className="w-full h-full object-cover" /><div className="absolute inset-0 border-2 border-[#006573]/50 border-dashed m-12 rounded-lg pointer-events-none animate-pulse" /></div>;
+        }
+
+        function AddProductView({ onAdd, initialData, onCancel, isEditing }) {
+            const [step, setStep] = useState(isEditing ? 'manual' : 'choice');
+            const [formData, setFormData] = useState(initialData || { name: '', brand: '', location: 'Général', category: 'Autres', quantity: 1, unit: 'unité', expiryDate: '', imageUrl: '' });
+            const [photo, setPhoto] = useState(formData.imageUrl || null);
+            const videoRef = useRef(null);
+
+            const handleScan = async (barcode) => {
+                const info = await fetchProductByBarcode(barcode);
+                if (info) setFormData(p => ({ ...p, ...info }));
+                setStep('manual');
+            };
+
+            const startCamera = async () => {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                    if (videoRef.current) videoRef.current.srcObject = stream;
+                } catch (err) { console.error(err); }
+            };
+
+            const takePhoto = () => {
+                if (videoRef.current) {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = videoRef.current.videoWidth;
+                    canvas.height = videoRef.current.videoHeight;
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) {
+                        ctx.drawImage(videoRef.current, 0, 0);
+                        const dataUrl = canvas.toDataURL('image/jpeg');
+                        setPhoto(dataUrl);
+                        setFormData(p => ({ ...p, imageUrl: dataUrl }));
+                        if (videoRef.current.srcObject) {
+                            videoRef.current.srcObject.getTracks().forEach(t => t.stop());
+                        }
+                    }
+                }
+            };
+
+            return (
+                <div className={`space-y-8 ${isEditing ? 'bg-white p-8 rounded-3xl shadow-2xl max-h-[90vh] overflow-y-auto' : ''}`}>
+                    {!isEditing && <div className="mb-12"><h2 className="font-headline font-extrabold text-4xl text-[#1a1c1e] tracking-tight mb-2">Ajouter</h2><p className="text-[#40484c] text-sm tracking-wide uppercase font-bold">Nouveau produit</p></div>}
+                    {step === 'choice' && (
+                        <div className="grid gap-6">
+                            <button onClick={() => setStep('scan')} className="bg-white/40 backdrop-blur-md border border-white/30 p-8 rounded-xl flex flex-col items-center gap-4 hover:bg-white/60 transition-all group"><div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#006573] to-[#50e1f9] flex items-center justify-center text-white group-hover:scale-110 transition-transform"><Icon name="Barcode" className="w-8 h-8" /></div><h3 className="font-headline font-bold text-xl">Scanner</h3></button>
+                            <button onClick={() => setStep('manual')} className="bg-white/40 backdrop-blur-md border border-white/30 p-8 rounded-xl flex flex-col items-center gap-4 hover:bg-white/60 transition-all group"><div className="w-16 h-16 rounded-full bg-[#dbeff1] flex items-center justify-center text-[#006573] group-hover:scale-110 transition-transform"><Icon name="Plus" className="w-8 h-8" /></div><h3 className="font-headline font-bold text-xl">Manuel</h3></button>
+                        </div>
+                    )}
+                    {step === 'scan' && (
+                        <div className="bg-white/40 backdrop-blur-md border border-white/30 rounded-xl p-6 overflow-hidden">
+                            <div className="flex justify-between items-center mb-4"><h3 className="font-headline font-bold">Scanner</h3><button onClick={() => setStep('choice')}><Icon name="X" /></button></div>
+                            <ScannerComponent onResult={handleScan} />
+                        </div>
+                    )}
+                    {step === 'manual' && (
+                        <div className="space-y-6 animate-in fade-in duration-500">
+                            <div className="flex justify-between items-center"><h3 className="font-headline font-bold text-xl">{isEditing ? 'Modifier' : 'Détails'}</h3><button onClick={isEditing ? onCancel : () => setStep('choice')}><Icon name="X" /></button></div>
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] uppercase font-black text-[#40484c]/40">Photo</label>
+                                    {photo ? (
+                                        <div className="relative rounded-xl overflow-hidden aspect-video"><img src={photo} alt="Produit" className="w-full h-full object-cover" /><button onClick={() => { setPhoto(null); startCamera(); }} className="absolute top-2 right-2 bg-black/50 text-white p-2 rounded-full"><Icon name="Trash2" className="w-4 h-4" /></button></div>
+                                    ) : (
+                                        <div className="relative rounded-xl overflow-hidden aspect-video bg-black/5 flex items-center justify-center"><video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" /><button onClick={takePhoto} className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-[#006573] text-white p-4 rounded-full shadow-lg"><Icon name="Camera" /></button><button onClick={startCamera} className="absolute top-4 right-4 bg-white/20 p-2 rounded-full text-white"><Icon name="RefreshCw" className="w-4 h-4" /></button></div>
+                                    )}
+                                </div>
+                                <input className="w-full bg-[#dbeff1]/40 border-none rounded-xl py-4 px-5 text-[#1a1c1e] font-bold outline-none" placeholder="Nom" value={formData.name} onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <input className="w-full bg-[#dbeff1]/40 border-none rounded-xl py-4 px-5 text-[#1a1c1e] text-sm outline-none" placeholder="Marque" value={formData.brand} onChange={e => setFormData(p => ({ ...p, brand: e.target.value }))} />
+                                    <input className="w-full bg-[#dbeff1]/40 border-none rounded-xl py-4 px-5 text-[#1a1c1e] text-sm outline-none" placeholder="Lieu" value={formData.location} onChange={e => setFormData(p => ({ ...p, location: e.target.value }))} />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="flex items-center bg-[#dbeff1]/40 rounded-xl px-3"><button onClick={() => setFormData(p => ({ ...p, quantity: Math.max(0, p.quantity - 1) }))} className="p-2 text-[#006573]"><Icon name="Minus" className="w-4 h-4" /></button><input type="number" className="w-full bg-transparent border-none text-center font-bold outline-none" value={formData.quantity} onChange={e => setFormData(p => ({ ...p, quantity: Number(e.target.value) }))} /><button onClick={() => setFormData(p => ({ ...p, quantity: p.quantity + 1 }))} className="p-2 text-[#006573]"><Icon name="Plus" className="w-4 h-4" /></button></div>
+                                    <select className="w-full bg-[#dbeff1]/40 border-none rounded-xl py-4 px-5 text-[#1a1c1e] outline-none" value={formData.unit} onChange={e => setFormData(p => ({ ...p, unit: e.target.value }))}>{UNITS.map(u => <option key={u} value={u}>{u}</option>)}</select>
+                                </div>
+                                <select className="w-full bg-[#dbeff1]/40 border-none rounded-xl py-4 px-5 text-[#1a1c1e] outline-none" value={formData.category} onChange={e => setFormData(p => ({ ...p, category: e.target.value }))}>{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                                <div className="space-y-1"><label className="text-[10px] uppercase font-black text-[#40484c]/40 ml-2">Date d'expiration</label><input type="date" className="w-full bg-[#dbeff1]/40 border-none rounded-xl py-4 px-5 text-[#1a1c1e] outline-none" value={formData.expiryDate} onChange={e => setFormData(p => ({ ...p, expiryDate: e.target.value }))} /></div>
+                                <button onClick={() => onAdd(formData)} disabled={!formData.name} className="w-full bg-gradient-to-r from-[#006573] to-[#008ba1] text-white font-headline font-bold py-5 rounded-full shadow-lg flex items-center justify-center gap-3 active:scale-95 transition-transform"><span>{isEditing ? 'Mettre à jour' : 'Enregistrer'}</span><Icon name="CheckCircle" /></button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         }
@@ -284,8 +405,8 @@
                         fetchFromGoogleSheets('stock'),
                         fetchFromGoogleSheets('epicerie')
                     ]);
-                    if (stockData.length > 0) setStock(stockData);
-                    if (groceryData.length > 0) setGrocery(groceryData);
+                    setStock(stockData);
+                    setGrocery(groceryData);
                 } catch (err) { console.error(err); }
                 setIsLoading(false);
             };
@@ -293,24 +414,27 @@
             useEffect(() => { loadAllData(); }, []);
 
             const addProduct = async (product) => {
-                const newProduct = { ...product, id: product.id || Date.now().toString(), addedAt: new Date().toISOString() };
+                const newProduct = { ...product, id: product.id || Date.now().toString(), addedAt: new Date().toISOString(), action: 'add' };
+                
+                // Bug "nouveau en bas" : On ajoute à la fin de la liste locale pour correspondre au Sheets
                 setStock(prev => {
                     const exists = prev.find(p => p.id === newProduct.id);
                     if (exists) return prev.map(p => p.id === newProduct.id ? newProduct : p);
-                    return [newProduct, ...prev];
+                    return [...prev, newProduct];
                 });
+                
                 confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
                 setActiveTab('stock');
-                await saveToGoogleSheets({ ...newProduct, action: 'add' }, 'stock');
+                await saveToGoogleSheets(newProduct, 'stock');
             };
 
             const addToGrocery = async (item) => {
-                const newItem = { id: Date.now().toString(), name: item.name, brand: item.brand || '', category: item.category, quantity: 1, unit: item.unit || 'unité', addedAt: new Date().toISOString() };
-                setGrocery(prev => [newItem, ...prev]);
+                const newItem = { id: Date.now().toString(), name: item.name, brand: item.brand || '', category: item.category, quantity: 1, unit: item.unit || 'unité', addedAt: new Date().toISOString(), action: 'add' };
+                setGrocery(prev => [...prev, newItem]);
                 setPromptItem(null);
                 setNotification(`"${item.name}" ajouté à l'épicerie !`);
                 setTimeout(() => setNotification(null), 3000);
-                await saveToGoogleSheets({ ...newItem, action: 'add' }, 'epicerie');
+                await saveToGoogleSheets(newItem, 'epicerie');
             };
 
             const updateQuantity = async (id, delta) => {
@@ -319,12 +443,12 @@
                     if (item.id === id) {
                         const newQty = Math.max(0, (Number(item.quantity) || 0) + delta);
                         if (newQty === 0 && delta < 0) setPromptItem(item);
-                        itemToSave = { ...item, quantity: newQty };
+                        itemToSave = { ...item, quantity: newQty, action: 'update' };
                         return itemToSave;
                     }
                     return item;
                 }));
-                if (itemToSave) await saveToGoogleSheets({ ...itemToSave, action: 'update' }, 'stock');
+                if (itemToSave) await saveToGoogleSheets(itemToSave, 'stock');
             };
 
             const removeFromStock = async (id) => {
@@ -338,181 +462,106 @@
             };
 
             const handleEdit = async (updatedProduct) => {
+                const productWithAction = { ...updatedProduct, action: 'update' };
                 setStock(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p));
                 setEditingProduct(null);
-                await saveToGoogleSheets({ ...updatedProduct, action: 'update' }, 'stock');
+                await saveToGoogleSheets(productWithAction, 'stock');
             };
 
-            const filteredStock = stock.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.category.toLowerCase().includes(searchQuery.toLowerCase()));
+            const filteredStock = stock.filter(p => (p.name || "").toLowerCase().includes(searchQuery.toLowerCase()) || (p.category || "").toLowerCase().includes(searchQuery.toLowerCase()));
 
             return (
-                <div className="min-h-screen bg-surface text-on-surface pb-32">
+                <div className="min-h-screen bg-[#f0f9fa] text-[#1a1c1e] pb-32 font-sans">
                     <header className="fixed top-0 w-full z-50 bg-white/70 backdrop-blur-xl shadow-sm flex justify-between items-center px-6 py-4">
                         <div className="flex items-center gap-3">
-                            <Icon name="snowflake" className="text-primary w-6 h-6" />
-                            <h1 className="text-2xl font-black text-primary tracking-tighter font-headline">Congélo</h1>
+                            <Icon name="Snowflake" className="text-[#006573] w-6 h-6" />
+                            <h1 className="text-2xl font-black text-[#006573] tracking-tighter">Congélo</h1>
                         </div>
-                        {isLoading && <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>}
+                        {isLoading && <div className="w-4 h-4 border-2 border-[#006573] border-t-transparent rounded-full animate-spin-custom"></div>}
                     </header>
 
                     <main className="pt-24 px-6 max-w-2xl mx-auto">
-                        <AnimatePresence mode="wait">
-                            {activeTab === 'stock' && (
-                                <motion.div key="stock" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-                                    <div className="mb-8">
-                                        <h2 className="text-4xl font-black text-primary tracking-tight font-headline">Mon Stock</h2>
-                                        <p className="text-on-surface-variant text-xs font-bold uppercase opacity-50">Appui long pour modifier</p>
-                                    </div>
-                                    <div className="relative mb-8">
-                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant"><Icon name="search" className="w-5 h-5" /></div>
-                                        <input className="w-full bg-white/40 backdrop-blur-md border-none focus:ring-2 focus:ring-primary/20 rounded-xl py-4 pl-12 pr-4 text-on-surface font-headline font-medium shadow-sm" placeholder="Rechercher..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-                                    </div>
-                                    <div className="grid gap-4">
-                                        {filteredStock.length === 0 ? <div className="text-center py-20 opacity-30"><Icon name="package" className="w-16 h-16 mx-auto mb-4" /><p className="font-bold">Aucun produit</p></div> : filteredStock.map((item) => <StockCard key={item.id} item={item} onRemove={() => removeFromStock(item.id)} onUpdate={updateQuantity} onLongPress={setEditingProduct} />)}
-                                    </div>
-                                </motion.div>
-                            )}
+                        {activeTab === 'stock' && (
+                            <div className="animate-in fade-in slide-in-from-left-4 duration-500">
+                                <div className="mb-8">
+                                    <h2 className="text-4xl font-black text-[#006573] tracking-tight font-headline">Mon Stock</h2>
+                                    <p className="text-[#40484c] text-xs font-bold uppercase opacity-50">Appui long pour modifier</p>
+                                </div>
+                                <div className="relative mb-8">
+                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#40484c]"><Icon name="Search" className="w-5 h-5" /></div>
+                                    <input className="w-full bg-white/40 backdrop-blur-md border-none focus:ring-2 focus:ring-[#006573]/20 rounded-xl py-4 pl-12 pr-4 text-[#1a1c1e] font-medium shadow-sm outline-none" placeholder="Rechercher..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                                </div>
+                                <div className="grid gap-4">
+                                    {filteredStock.length === 0 ? (
+                                        <div className="text-center py-20 opacity-30">
+                                            <Icon name="Package" className="w-16 h-16 mx-auto mb-4" />
+                                            <p className="font-bold">Aucun produit</p>
+                                        </div>
+                                    ) : (
+                                        filteredStock.map((item) => (
+                                            <StockCard key={item.id} item={item} onRemove={() => removeFromStock(item.id)} onUpdate={updateQuantity} onLongPress={setEditingProduct} />
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        )}
 
-                            {activeTab === 'grocery' && (
-                                <motion.div key="grocery" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-                                    <div className="mb-8"><h2 className="text-4xl font-black text-primary tracking-tight font-headline">Épicerie</h2><p className="text-on-surface-variant text-xs font-bold uppercase opacity-50">Liste de courses</p></div>
-                                    <div className="grid gap-3">
-                                        {grocery.length === 0 ? <div className="text-center py-20 opacity-30"><Icon name="shopping-cart" className="w-16 h-16 mx-auto mb-4" /><p className="font-bold">Liste vide</p></div> : grocery.map((item) => <GroceryCard key={item.id} item={item} onRemove={() => removeFromGrocery(item.id)} onMoveToStock={() => { addProduct({ ...item, quantity: 1 }); removeFromGrocery(item.id); }} />)}
-                                    </div>
-                                </motion.div>
-                            )}
+                        {activeTab === 'grocery' && (
+                            <div className="animate-in fade-in slide-in-from-right-4 duration-500">
+                                <div className="mb-8"><h2 className="text-4xl font-black text-[#006573] tracking-tight font-headline">Épicerie</h2><p className="text-[#40484c] text-xs font-bold uppercase opacity-50">Liste de courses</p></div>
+                                <div className="grid gap-3">
+                                    {grocery.length === 0 ? (
+                                        <div className="text-center py-20 opacity-30">
+                                            <Icon name="ShoppingCart" className="w-16 h-16 mx-auto mb-4" />
+                                            <p className="font-bold">Liste vide</p>
+                                        </div>
+                                    ) : (
+                                        grocery.map((item) => (
+                                            <GroceryCard key={item.id} item={item} onRemove={() => removeFromGrocery(item.id)} onMoveToStock={() => { addProduct({ ...item, quantity: 1 }); removeFromGrocery(item.id); }} />
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        )}
 
-                            {activeTab === 'add' && (
-                                <motion.div key="add" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-                                    <AddProductView onAdd={addProduct} />
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
+                        {activeTab === 'add' && (
+                            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                <AddProductView onAdd={addProduct} />
+                            </div>
+                        )}
                     </main>
 
                     {editingProduct && (
                         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
-                            <div className="w-full max-w-md"><AddProductView initialData={editingProduct} onAdd={handleEdit} onCancel={() => setEditingProduct(null)} isEditing={true} /></div>
-                        </div>
-                    )}
-
-                    <nav className="fixed bottom-0 left-0 w-full flex justify-around items-center px-4 pb-8 pt-3 bg-white/60 backdrop-blur-md rounded-t-[1.5rem] z-50 shadow-lg">
-                        <NavButton active={activeTab === 'stock'} onClick={() => setActiveTab('stock')} iconName="package" label="Stock" />
-                        <NavButton active={activeTab === 'grocery'} onClick={() => setActiveTab('grocery')} iconName="shopping-cart" label="Épicerie" />
-                        <NavButton active={activeTab === 'add'} onClick={() => setActiveTab('add')} iconName="plus-circle" label="Ajouter" />
-                    </nav>
-
-                    <AnimatePresence>
-                        {promptItem && (
-                            <Modal title="Produit épuisé" onClose={() => setPromptItem(null)}>
-                                <p className="text-on-surface-variant mb-6"><strong>{promptItem.name}</strong> est à zéro. L'ajouter à l'épicerie ?</p>
-                                <div className="flex gap-3">
-                                    <button onClick={() => setPromptItem(null)} className="flex-1 py-3 rounded-xl bg-surface-variant text-on-surface-variant font-bold">Non</button>
-                                    <button onClick={() => addToGrocery(promptItem)} className="flex-1 py-3 rounded-xl bg-primary text-white font-bold shadow-lg">Oui</button>
-                                </div>
-                            </Modal>
-                        )}
-                        {notification && (
-                            <motion.div initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 100, opacity: 0 }} className="fixed bottom-28 left-1/2 -translate-x-1/2 z-[150] bg-primary text-white px-6 py-3 rounded-full shadow-xl font-bold flex items-center gap-2">
-                                <Icon name="check-circle" className="w-5 h-5" />{notification}
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                </div>
-            );
-        }
-
-        function AddProductView({ onAdd, initialData, onCancel, isEditing }) {
-            const [step, setStep] = useState(isEditing ? 'manual' : 'choice');
-            const [formData, setFormData] = useState(initialData || { name: '', brand: '', location: 'Général', category: 'Autres', quantity: 1, unit: 'unité', expiryDate: '', imageUrl: '', isFavorite: false });
-            const [photo, setPhoto] = useState(formData.imageUrl || null);
-            const videoRef = useRef(null);
-
-            useEffect(() => {
-                return () => { if (videoRef.current && videoRef.current.srcObject) videoRef.current.srcObject.getTracks().forEach(t => t.stop()); };
-            }, []);
-
-            const handleScan = async (barcode) => {
-                const info = await fetchProductByBarcode(barcode);
-                if (info) setFormData(p => ({ ...p, ...info }));
-                setStep('manual');
-            };
-
-            const startCamera = async () => {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-                    if (videoRef.current) videoRef.current.srcObject = stream;
-                } catch (err) { console.error(err); }
-            };
-
-            const takePhoto = () => {
-                if (videoRef.current) {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = videoRef.current.videoWidth;
-                    canvas.height = videoRef.current.videoHeight;
-                    canvas.getContext('2d').drawImage(videoRef.current, 0, 0);
-                    const dataUrl = canvas.toDataURL('image/jpeg');
-                    setPhoto(dataUrl);
-                    setFormData(p => ({ ...p, imageUrl: dataUrl }));
-                    if (videoRef.current.srcObject) videoRef.current.srcObject.getTracks().forEach(t => t.stop());
-                }
-            };
-
-            return (
-                <div className={`space-y-8 ${isEditing ? 'bg-surface p-8 rounded-3xl shadow-2xl max-h-[90vh] overflow-y-auto' : ''}`}>
-                    {!isEditing && <div className="mb-12"><h2 className="font-headline font-extrabold text-4xl text-on-surface tracking-tight mb-2">Ajouter</h2><p className="font-label text-on-surface-variant text-sm tracking-wide uppercase">Nouveau produit</p></div>}
-                    {step === 'choice' && (
-                        <div className="grid gap-6">
-                            <button onClick={() => setStep('scan')} className="glass-card p-8 rounded-xl flex flex-col items-center gap-4 hover:bg-white/60 transition-all group"><div className="w-16 h-16 rounded-full frost-gradient flex items-center justify-center text-white group-hover:scale-110 transition-transform"><Icon name="barcode" className="w-8 h-8" /></div><h3 className="font-headline font-bold text-xl">Scanner</h3></button>
-                            <button onClick={() => setStep('manual')} className="glass-card p-8 rounded-xl flex flex-col items-center gap-4 hover:bg-white/60 transition-all group"><div className="w-16 h-16 rounded-full bg-surface-variant flex items-center justify-center text-primary group-hover:scale-110 transition-transform"><Icon name="plus" className="w-8 h-8" /></div><h3 className="font-headline font-bold text-xl">Manuel</h3></button>
-                        </div>
-                    )}
-                    {step === 'scan' && (
-                        <div className="glass-card rounded-xl p-6 overflow-hidden">
-                            <div className="flex justify-between items-center mb-4"><h3 className="font-headline font-bold">Scanner</h3><button onClick={() => setStep('choice')}><Icon name="x" /></button></div>
-                            <ScannerComponent onResult={handleScan} />
-                        </div>
-                    )}
-                    {step === 'manual' && (
-                        <div className={`${isEditing ? '' : 'glass-card p-8 rounded-xl'} space-y-6`}>
-                            <div className="flex justify-between items-center"><h3 className="font-headline font-bold text-xl">{isEditing ? 'Modifier' : 'Détails'}</h3><button onClick={isEditing ? onCancel : () => setStep('choice')}><Icon name="x" /></button></div>
-                            <div className="space-y-4">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] uppercase font-black text-on-surface-variant/40">Photo</label>
-                                    {photo ? (
-                                        <div className="relative rounded-xl overflow-hidden aspect-video"><img src={photo} alt="Produit" className="w-full h-full object-cover" /><button onClick={() => { setPhoto(null); startCamera(); }} className="absolute top-2 right-2 bg-black/50 text-white p-2 rounded-full"><Icon name="trash-2" className="w-4 h-4" /></button></div>
-                                    ) : (
-                                        <div className="relative rounded-xl overflow-hidden aspect-video bg-black/5 flex items-center justify-center"><video ref={videoRef} autoPlay playsInline /><button onClick={takePhoto} className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-primary text-white p-4 rounded-full shadow-lg"><Icon name="camera" /></button><button onClick={startCamera} className="absolute top-4 right-4 bg-white/20 p-2 rounded-full text-white"><Icon name="refresh-cw" className="w-4 h-4" /></button></div>
-                                    )}
-                                </div>
-                                <input className="w-full bg-surface-variant/40 border-none rounded-xl py-4 px-5 text-on-surface font-bold" placeholder="Nom" value={formData.name} onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} />
-                                <div className="grid grid-cols-2 gap-4">
-                                    <input className="w-full bg-surface-variant/40 border-none rounded-xl py-4 px-5 text-on-surface text-sm" placeholder="Marque" value={formData.brand} onChange={e => setFormData(p => ({ ...p, brand: e.target.value }))} />
-                                    <input className="w-full bg-surface-variant/40 border-none rounded-xl py-4 px-5 text-on-surface text-sm" placeholder="Lieu" value={formData.location} onChange={e => setFormData(p => ({ ...p, location: e.target.value }))} />
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="flex items-center bg-surface-variant/40 rounded-xl px-3"><button onClick={() => setFormData(p => ({ ...p, quantity: Math.max(0, p.quantity - 1) }))} className="p-2 text-primary"><Icon name="minus" className="w-4 h-4" /></button><input type="number" className="w-full bg-transparent border-none text-center font-bold" value={formData.quantity} onChange={e => setFormData(p => ({ ...p, quantity: Number(e.target.value) }))} /><button onClick={() => setFormData(p => ({ ...p, quantity: p.quantity + 1 }))} className="p-2 text-primary"><Icon name="plus" className="w-4 h-4" /></button></div>
-                                    <select className="w-full bg-surface-variant/40 border-none rounded-xl py-4 px-5 text-on-surface" value={formData.unit} onChange={e => setFormData(p => ({ ...p, unit: e.target.value }))}>{UNITS.map(u => <option key={u} value={u}>{u}</option>)}</select>
-                                </div>
-                                <select className="w-full bg-surface-variant/40 border-none rounded-xl py-4 px-5 text-on-surface" value={formData.category} onChange={e => setFormData(p => ({ ...p, category: e.target.value }))}>{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
-                                <div className="space-y-1"><label className="text-[10px] uppercase font-black text-on-surface-variant/40 ml-2">Date d'expiration</label><input type="date" className="w-full bg-surface-variant/40 border-none rounded-xl py-4 px-5 text-on-surface" value={formData.expiryDate} onChange={e => setFormData(p => ({ ...p, expiryDate: e.target.value }))} /></div>
-                                <button onClick={() => onAdd(formData)} disabled={!formData.name} className="w-full shimmer-gradient text-on-primary font-headline font-bold py-5 rounded-full shadow-lg flex items-center justify-center gap-3"><span>{isEditing ? 'Mettre à jour' : 'Enregistrer'}</span><Icon name="check-circle" /></button>
+                            <div className="w-full max-w-md animate-in zoom-in duration-300">
+                                <AddProductView initialData={editingProduct} onAdd={handleEdit} onCancel={() => setEditingProduct(null)} isEditing={true} />
                             </div>
                         </div>
                     )}
+
+                    <nav className="fixed bottom-0 left-0 w-full flex justify-around items-center px-4 pb-8 pt-3 bg-white/60 backdrop-blur-md rounded-t-[1.5rem] z-50 shadow-lg border-t border-white/20">
+                        <NavButton active={activeTab === 'stock'} onClick={() => setActiveTab('stock')} iconName="Package" label="Stock" />
+                        <NavButton active={activeTab === 'grocery'} onClick={() => setActiveTab('grocery')} iconName="ShoppingCart" label="Épicerie" />
+                        <NavButton active={activeTab === 'add'} onClick={() => setActiveTab('add')} iconName="PlusCircle" label="Ajouter" />
+                    </nav>
+
+                    {promptItem && (
+                        <Modal title="Produit épuisé" onClose={() => setPromptItem(null)}>
+                            <p className="text-[#40484c] mb-6"><strong>{promptItem.name}</strong> est à zéro. L'ajouter à l'épicerie ?</p>
+                            <div className="flex gap-3">
+                                <button onClick={() => setPromptItem(null)} className="flex-1 py-3 rounded-xl bg-[#dbeff1] text-[#40484c] font-bold">Non</button>
+                                <button onClick={() => addToGrocery(promptItem)} className="flex-1 py-3 rounded-xl bg-[#006573] text-white font-bold shadow-lg">Oui</button>
+                            </div>
+                        </Modal>
+                    )}
+
+                    {notification && (
+                        <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-[150] bg-[#006573] text-white px-6 py-3 rounded-full shadow-xl font-bold flex items-center gap-2 animate-in slide-in-from-bottom-10 duration-300">
+                            <Icon name="CheckCircle" className="w-5 h-5" />{notification}
+                        </div>
+                    )}
                 </div>
             );
-        }
-
-        function ScannerComponent({ onResult }) {
-            const videoRef = useRef(null);
-            useEffect(() => {
-                if (!window.ZXing) return;
-                const reader = new ZXing.BrowserMultiFormatReader();
-                reader.decodeFromVideoDevice(null, videoRef.current, (res) => { if (res) onResult(res.text); });
-                return () => reader.reset();
-            }, [onResult]);
-            return <div className="relative aspect-square bg-black rounded-xl overflow-hidden"><video ref={videoRef} /><div className="absolute inset-0 border-2 border-primary/50 border-dashed m-12 rounded-lg pointer-events-none animate-pulse" /></div>;
         }
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
