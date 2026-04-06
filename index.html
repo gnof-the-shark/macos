@@ -49,9 +49,25 @@
             width: 12px; height: 12px; border-radius: 50%;
             background: var(--primary); transition: all 0.3s ease;
         }
+        .sync-ok { background: var(--primary); }
+        .sync-syncing { background: var(--accent); animation: pulse 1s infinite; }
         .sync-pending { 
             background: var(--warning); 
             animation: pulse 1s infinite; 
+        }
+        .sync-error { background: var(--danger); }
+        .sync-status {
+            font-size: 12px;
+            color: var(--text-sub);
+            font-weight: 600;
+        }
+        .sync-btn {
+            border: none;
+            background: rgba(255,255,255,0.8);
+            border-radius: 10px;
+            padding: 4px 8px;
+            font-size: 12px;
+            cursor: pointer;
         }
 
         @keyframes pulse {
@@ -199,7 +215,11 @@
 
     <header>
         <h1 style="margin:0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">Congélo Stock</h1>
-        <div id="sync-dot" class="sync-indicator"></div>
+        <div style="display:flex; align-items:center; gap:8px;">
+            <span id="sync-status-label" class="sync-status" role="status" aria-live="polite">Initialisation...</span>
+            <div id="sync-dot" class="sync-indicator sync-ok"></div>
+            <button class="sync-btn" onclick="forceSync()" aria-label="Forcer la synchronisation" title="Forcer la synchronisation">↻</button>
+        </div>
     </header>
 
     <!-- PAGE: LISTE STOCK -->
@@ -265,48 +285,153 @@
 
     <script>
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyKvsPm-im81d1RJYlmBmpcMSHdjfLOv_436FdLlJue5wRNujsWx-JSZJVpVnY1Bg/exec";
+        const RETRY_INTERVAL_MS = 5000;
+        const REFRESH_INTERVAL_MS = 30000;
+        const SCAN_HAPTIC_DURATION_MS = 120;
+
         let inventory = [], grocery = [];
         let tempProd = null, codeReader = null, isScanning = false;
-        let syncQueue = JSON.parse(localStorage.getItem('syncQueue') || '[]');
+        let syncQueue = [];
         let isProcessingQueue = false;
+        let queueRetryTimer = null;
+        let refreshTimer = null;
+        let syncError = null;
+
+        const SYNC_QUEUE_STORAGE_KEY = 'syncQueue';
+        const deviceId = getOrCreatePersistedValue('deviceId', () => generateId('device'));
+        const sessionId = generateId('ses');
+        syncQueue = loadQueueFromStorage();
+
+        function generateId(prefix) {
+            return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        }
+
+        function getOrCreatePersistedValue(key, valueFactory) {
+            const existing = localStorage.getItem(key);
+            if (existing) return existing;
+            const value = valueFactory();
+            localStorage.setItem(key, value);
+            return value;
+        }
+
+        function loadQueueFromStorage() {
+            try {
+                return JSON.parse(localStorage.getItem(SYNC_QUEUE_STORAGE_KEY) || '[]');
+            } catch (e) {
+                console.error('Invalid local sync queue, resetting queue', e);
+                return [];
+            }
+        }
+        function saveQueueToStorage() {
+            localStorage.setItem(SYNC_QUEUE_STORAGE_KEY, JSON.stringify(syncQueue));
+        }
 
         function showLoader(s) { document.getElementById('loader').style.display = s ? 'flex' : 'none'; }
-        function updateSyncIndicator() { document.getElementById('sync-dot').className = syncQueue.length > 0 ? 'sync-indicator sync-pending' : 'sync-indicator'; }
+        function triggerScanHaptic() {
+            try {
+                if (navigator && typeof navigator.vibrate === 'function') {
+                    navigator.vibrate(SCAN_HAPTIC_DURATION_MS);
+                }
+            } catch (e) {
+                console.debug('Vibration not available', e);
+            }
+        }
+        function updateSyncIndicator() {
+            const dot = document.getElementById('sync-dot');
+            const label = document.getElementById('sync-status-label');
+            let cls = 'sync-indicator sync-ok';
+            let txt = 'Sync OK';
+            if (syncError) { cls = 'sync-indicator sync-error'; txt = 'Erreur sync'; }
+            else if (isProcessingQueue) { cls = 'sync-indicator sync-syncing'; txt = 'Sync...'; }
+            else if (syncQueue.length > 0) { cls = 'sync-indicator sync-pending'; txt = `En attente (${syncQueue.length})`; }
+            dot.className = cls;
+            label.textContent = txt;
+        }
 
-        // Gestion de la synchronisation robuste
+        function buildApiUrl(extraParams = {}) {
+            const u = new URL(SCRIPT_URL);
+            Object.entries(extraParams).forEach(([k, v]) => {
+                if (v !== undefined && v !== null && v !== '') u.searchParams.set(k, String(v));
+            });
+            return u.toString();
+        }
+
+        function addSyncMetadata(payload) {
+            return {
+                ...payload,
+                deviceId,
+                sessionId,
+                clientTimestamp: new Date().toISOString()
+            };
+        }
+
         async function queueAction(payload) {
-            syncQueue.push(payload);
-            localStorage.setItem('syncQueue', JSON.stringify(syncQueue));
+            syncQueue.push(addSyncMetadata(payload));
+            saveQueueToStorage();
+            syncError = null;
             updateSyncIndicator();
             processQueue();
+        }
+
+        async function postAction(payload) {
+            const formData = new FormData();
+            formData.append('data', JSON.stringify(payload));
+            const response = await fetch(buildApiUrl({ target: payload.target }), { method: 'POST', body: formData });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const result = await response.json();
+            if (!result || result.status !== 'success') throw new Error('Sync rejected by server');
         }
 
         async function processQueue() {
             if (isProcessingQueue || syncQueue.length === 0) return;
             isProcessingQueue = true;
-            let shouldRetry = false;
+            syncError = null;
+            updateSyncIndicator();
+            let processedCount = 0;
             try {
                 while (syncQueue.length > 0) {
                     const payload = syncQueue[0];
-                    const formData = new FormData();
-                    formData.append('data', JSON.stringify(payload));
-                    const response = await fetch(SCRIPT_URL, { method: 'POST', body: formData });
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                    const result = await response.json();
-                    if (!result || result.status !== 'success') throw new Error('Sync rejected by server');
+                    await postAction(payload);
                     syncQueue.shift();
-                    localStorage.setItem('syncQueue', JSON.stringify(syncQueue));
+                    saveQueueToStorage();
+                    processedCount += 1;
                     updateSyncIndicator();
                 }
-            } catch (e) { 
-                console.error("Sync error - retrying later", e); 
-                shouldRetry = true;
+            } catch (e) {
+                console.error("Sync error - retrying later", e);
+                syncError = e;
             } finally {
                 isProcessingQueue = false;
-                if (shouldRetry && syncQueue.length > 0) {
-                    setTimeout(processQueue, 5000);
-                }
+                updateSyncIndicator();
             }
+
+            if (processedCount > 0) {
+                await refreshAllData({ silent: true });
+            }
+
+            if (queueRetryTimer) clearTimeout(queueRetryTimer);
+            if (syncQueue.length > 0) {
+                queueRetryTimer = setTimeout(processQueue, RETRY_INTERVAL_MS);
+            }
+        }
+
+        async function refreshAllData({ silent = true } = {}) {
+            if (!silent) showLoader(true);
+            try {
+                await Promise.all([
+                    loadInventory({ silent: true }),
+                    loadGrocery({ silent: true })
+                ]);
+            } finally {
+                if (!silent) showLoader(false);
+            }
+        }
+
+        async function forceSync() {
+            syncError = null;
+            updateSyncIndicator();
+            await processQueue();
+            await refreshAllData({ silent: true });
         }
 
         // Navigation
@@ -322,16 +447,16 @@
         }
 
         // --- STOCK ---
-        async function loadInventory() {
-            showLoader(true);
+        async function loadInventory({ silent = false } = {}) {
+            if (!silent) showLoader(true);
             try {
-                const r = await fetch(`${SCRIPT_URL}?target=inventory&t=${Date.now()}`);
+                const r = await fetch(buildApiUrl({ target: 'inventory', t: Date.now() }));
                 inventory = await r.json();
                 renderInventory();
             } catch(e) { 
                 console.error("Erreur de chargement", e);
                 document.getElementById('inventory-container').innerHTML = "Erreur de connexion.";
-            } finally { showLoader(false); }
+            } finally { if (!silent) showLoader(false); }
         }
 
         function isTrue(v) { return v === true || v === "TRUE" || String(v).toLowerCase() === "true"; }
@@ -387,13 +512,13 @@
         }
 
         // --- COURSES ---
-        async function loadGrocery() {
-            showLoader(true);
+        async function loadGrocery({ silent = false } = {}) {
+            if (!silent) showLoader(true);
             try {
-                const r = await fetch(`${SCRIPT_URL}?target=grocery&t=${Date.now()}`);
+                const r = await fetch(buildApiUrl({ target: 'grocery', t: Date.now() }));
                 grocery = await r.json();
                 renderGrocery();
-            } catch(e) { console.error(e); } finally { showLoader(false); }
+            } catch(e) { console.error(e); } finally { if (!silent) showLoader(false); }
         }
 
         function renderGrocery() {
@@ -453,6 +578,7 @@
                 codeReader.decodeFromVideoDevice(id, 'video', (res) => {
                     if(res && isScanning) { 
                         isScanning = false; 
+                        triggerScanHaptic();
                         codeReader.reset(); 
                         processBarcode(res.text); 
                     }
@@ -506,13 +632,18 @@
         }
 
         function confirmAdd() {
+            const quantity = parseInt(document.getElementById('prod-qty').value, 10);
+            if (!Number.isFinite(quantity) || quantity <= 0) {
+                alert("Quantité invalide. Veuillez entrer un nombre supérieur à 0.");
+                return;
+            }
             const payload = {
                 action: "add", target: "inventory",
                 barcode: tempProd.barcode,
                 name: document.getElementById('prod-name').value,
                 brand: document.getElementById('prod-brand').value,
                 image: tempProd.image || "",
-                quantity: parseInt(document.getElementById('prod-qty').value),
+                quantity: quantity,
                 emplacement: document.getElementById('prod-cat').value,
                 favoris: false
             };
@@ -532,13 +663,39 @@
         }
 
         // Initialisation
-        window.onload = () => { 
-            loadInventory(); 
+        function startBackgroundRefresh() {
+            if (refreshTimer) clearInterval(refreshTimer);
+            refreshTimer = null;
+            if (document.visibilityState !== 'visible') return;
+            refreshTimer = setInterval(() => {
+                refreshAllData({ silent: true });
+                processQueue();
+            }, REFRESH_INTERVAL_MS);
+        }
+
+        window.onload = () => {
+            refreshAllData({ silent: false });
             updateSyncIndicator();
             processQueue();
+            startBackgroundRefresh();
         };
 
-        window.addEventListener('online', processQueue);
+        window.addEventListener('online', () => {
+            syncError = null;
+            updateSyncIndicator();
+            processQueue();
+            refreshAllData({ silent: true });
+        });
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                refreshAllData({ silent: true });
+                processQueue();
+                startBackgroundRefresh();
+            } else if (refreshTimer) {
+                clearInterval(refreshTimer);
+                refreshTimer = null;
+            }
+        });
     </script>
 </body>
 </html>
