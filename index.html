@@ -216,9 +216,9 @@
     <header>
         <h1 style="margin:0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">Congélo Stock</h1>
         <div style="display:flex; align-items:center; gap:8px;">
-            <span id="sync-status-label" class="sync-status">Sync OK</span>
+            <span id="sync-status-label" class="sync-status" role="status" aria-live="polite">Sync OK</span>
             <div id="sync-dot" class="sync-indicator sync-ok"></div>
-            <button class="sync-btn" onclick="forceSync()">↻</button>
+            <button class="sync-btn" onclick="forceSync()" aria-label="Forcer la synchronisation" title="Forcer la synchronisation">↻</button>
         </div>
     </header>
 
@@ -310,7 +310,12 @@
         }
 
         function loadQueueFromStorage() {
-            try { return JSON.parse(localStorage.getItem(SYNC_QUEUE_STORAGE_KEY) || '[]'); } catch { return []; }
+            try {
+                return JSON.parse(localStorage.getItem(SYNC_QUEUE_STORAGE_KEY) || '[]');
+            } catch (e) {
+                console.error('Invalid local sync queue, resetting queue', e);
+                return [];
+            }
         }
         function saveQueueToStorage() {
             localStorage.setItem(SYNC_QUEUE_STORAGE_KEY, JSON.stringify(syncQueue));
@@ -397,10 +402,15 @@
         }
 
         async function refreshAllData({ silent = true } = {}) {
-            await Promise.all([
-                loadInventory({ silent }),
-                loadGrocery({ silent })
-            ]);
+            if (!silent) showLoader(true);
+            try {
+                await Promise.all([
+                    loadInventory({ silent: true }),
+                    loadGrocery({ silent: true })
+                ]);
+            } finally {
+                if (!silent) showLoader(false);
+            }
         }
 
         async function forceSync() {
@@ -640,6 +650,7 @@
         // Initialisation
         function startBackgroundRefresh() {
             if (refreshTimer) clearInterval(refreshTimer);
+            refreshTimer = null;
             if (document.visibilityState !== 'visible') return;
             refreshTimer = setInterval(() => {
                 refreshAllData({ silent: true });
