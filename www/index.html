@@ -27,7 +27,7 @@
             if(!monitoring) return;
             try {
                 // Remplace par l'IP de ton PC
-                const res = await fetch('http://TON_IP_PC:5000/check-alert');
+                const res = await fetch('http://172.30.160.1:5000/check-alert');
                 const data = await res.json();
                 if(data.alert) {
                     alert("⚠️ VITE ! NOUVEAU COMMENTAIRE !");
