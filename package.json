@@ -4,7 +4,7 @@
   "description": "App de surveillance YouTube pour concours iPhone",
   "main": "index.js",
   "scripts": {
-    "build": "mkdir -p www && cp src/index.html www/",
+    "build": "mkdir -p www && cp index.html www/",
     "sync": "cap sync ios",
     "open": "cap open ios"
   },
