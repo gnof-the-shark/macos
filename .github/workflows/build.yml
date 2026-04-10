@@ -37,14 +37,8 @@ jobs:
       - name: Copie du Podfile personnalisé
         run: cp podfile ios/App/Podfile
 
-      - name: Prépare les icônes
-        run: mkdir -p assets && cp icon123.png assets/icon-only.png
-
       - name: Rebuild sharp pour darwin-arm64
         run: npm rebuild sharp --platform=darwin --arch=arm64 || npm install --no-save --platform=darwin --arch=arm64 sharp
-
-      - name: Génération des icônes depuis icon.png
-        run: npm run res
 
       - name: Pod install
         run: cd ios/App && pod install --repo-update
