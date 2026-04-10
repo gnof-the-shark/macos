@@ -1,18 +1,22 @@
 {
-  "name": "remotecam",
+  "name": "yt-monitor-iphone",
   "version": "1.0.0",
-  "description": "RemoteCam iOS app via Capacitor",
+  "description": "App de surveillance YouTube pour concours iPhone",
+  "main": "index.js",
   "scripts": {
-    "build": "mkdir -p www && cp index.html www/ && cp node_modules/@zxing/library/umd/index.min.js www/zxing-library.min.js",
-    "res": "capacitor-assets generate"
+    "build": "mkdir -p www && cp src/index.html www/",
+    "sync": "cap sync ios",
+    "open": "cap open ios"
   },
   "dependencies": {
-    "@capacitor/core": "^6.0.0",
-    "@capacitor/ios": "^6.0.0",
-    "@zxing/library": "0.18.6"
+    "@capacitor/core": "^5.0.0",
+    "@capacitor/ios": "^5.0.0",
+    "@capacitor/local-notifications": "^5.0.0",
+    "@capacitor/app": "^5.0.0"
   },
   "devDependencies": {
-    "@capacitor/assets": "^3.0.0",
-    "@capacitor/cli": "^6.0.0"
-  }
+    "@capacitor/cli": "^5.0.0"
+  },
+  "author": "Christophe",
+  "license": "MIT"
 }
