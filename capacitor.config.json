@@ -1,6 +1,9 @@
 {
-  "appId": "com.gnoftheshark.congelo",
-  "appName": "notif",
+  "appId": "com.christophe.ytmonitor",
+  "appName": "YT Monitor",
   "webDir": "www",
-  "bundledWebRuntime": false
+  "server": {
+    "cleartext": true,
+    "allowNavigation": ["192.168.40.80:5000"]
+  }
 }
