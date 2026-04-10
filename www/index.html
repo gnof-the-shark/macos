@@ -3,38 +3,98 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube Monitor</title>
+    <title>YT Monitor - Debug Mode</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-900 text-white flex flex-col items-center justify-center h-screen">
-    <h1 class="text-2xl font-bold mb-4">YouTube Monitor</h1>
-    <div id="status" class="w-12 h-12 rounded-full bg-red-500 mb-6"></div>
-    <button id="startBtn" class="bg-blue-600 px-6 py-2 rounded-lg font-semibold">Démarrer la surveillance</button>
+<body class="bg-gray-900 text-white flex flex-col items-center justify-center h-screen p-4">
+    
+    <h1 class="text-3xl font-bold mb-8 text-blue-400">YT Monitor</h1>
 
-    <script>
-        const statusCircle = document.getElementById('status');
+    <div class="bg-gray-800 p-6 rounded-2xl shadow-xl w-full max-w-sm text-center border border-gray-700">
+        <p class="text-gray-400 uppercase text-sm tracking-widest mb-2">État de l'alerte</p>
+        <div id="statusValue" class="text-5xl font-mono font-bold text-gray-500 italic">WAITING</div>
+        
+        <div class="mt-6 flex items-center justify-center gap-2">
+            <div id="led" class="w-3 h-3 rounded-full bg-red-600"></div>
+            <p id="connexionText" class="text-xs text-gray-500">Non connecté</p>
+        </div>
+    </div>
+
+    <div class="mt-10 flex flex-col gap-4 w-full max-w-sm">
+        <button id="startBtn" class="bg-blue-600 hover:bg-blue-500 active:scale-95 transition-all py-4 rounded-xl font-bold text-lg shadow-lg">
+            DÉMARRER LE TEST
+        </button>
+        
+        <div class="text-center">
+            <p class="text-[10px] text-gray-600">Dernière mise à jour : <span id="lastTime">--:--:--</span></p>
+        </div>
+    </div>
+
+    <script type="module">
+        import { LocalNotifications } from '@capacitor/local-notifications';
+
+        const statusValue = document.getElementById('statusValue');
+        const led = document.getElementById('led');
+        const connexionText = document.getElementById('connexionText');
+        const lastTime = document.getElementById('lastTime');
         const startBtn = document.getElementById('startBtn');
-        let monitoring = false;
+
+        let isMonitoring = false;
+        // METS TON IP ICI
+        const SERVER_URL = 'http://192.168.1.XX:5000/check-alert'; 
+
+        async function triggerNotif() {
+            await LocalNotifications.schedule({
+                notifications: [{
+                    title: "⚠️ IPHONE DÉTECTÉ !",
+                    body: "Fonce commenter sur YouTube !",
+                    id: 1,
+                    sound: 'trigger.wav'
+                }]
+            });
+        }
+
+        async function checkServer() {
+            if (!isMonitoring) return;
+
+            try {
+                const response = await fetch(SERVER_URL, { method: 'GET' });
+                const data = await response.json();
+
+                // Mise à jour de l'affichage
+                statusValue.innerText = data.alert ? "TRUE" : "FALSE";
+                statusValue.className = `text-5xl font-mono font-bold ${data.alert ? 'text-green-500' : 'text-red-500'}`;
+                
+                led.className = "w-3 h-3 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]";
+                connexionText.innerText = "Connecté au PC";
+                lastTime.innerText = new Date().toLocaleTimeString();
+
+                if (data.alert === true) {
+                    await triggerNotif();
+                }
+
+            } catch (err) {
+                statusValue.innerText = "ERROR";
+                statusValue.className = "text-5xl font-mono font-bold text-yellow-500";
+                led.className = "w-3 h-3 rounded-full bg-red-600";
+                connexionText.innerText = "Erreur réseau (vérifie l'IP)";
+            }
+
+            // On recommence dans 5 secondes
+            setTimeout(checkServer, 5000);
+        }
 
         startBtn.onclick = () => {
-            monitoring = !monitoring;
-            startBtn.innerText = monitoring ? "Arrêter" : "Démarrer";
-            statusCircle.className = `w-12 h-12 rounded-full ${monitoring ? 'bg-green-500' : 'bg-red-500'} mb-6`;
-            if(monitoring) checkAlert();
+            isMonitoring = !isMonitoring;
+            if (isMonitoring) {
+                startBtn.innerText = "ARRÊTER";
+                startBtn.classList.replace('bg-blue-600', 'bg-red-900');
+                statusValue.innerText = "CHECKING...";
+                checkServer();
+            } else {
+                location.reload(); // Reset propre
+            }
         };
-
-        async function checkAlert() {
-            if(!monitoring) return;
-            try {
-                // Remplace par l'IP de ton PC
-                const res = await fetch('http://172.30.160.1:5000/check-alert');
-                const data = await res.json();
-                if(data.alert) {
-                    alert("⚠️ VITE ! NOUVEAU COMMENTAIRE !");
-                }
-            } catch (e) { console.error("Erreur serveur", e); }
-            setTimeout(checkAlert, 10000); // Vérifie toutes les 10 sec
-        }
     </script>
 </body>
 </html>
